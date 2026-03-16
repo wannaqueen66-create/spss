@@ -19,6 +19,13 @@ B_COLS = ["B1", "B2", "B3", "Bmean"]
 IPQ_COLS = ["IPQ1", "IPQ2", "IPQ3", "IPQ4", "IPQ5", "IPQ6", "IPQ_mean"]
 LIKERT_LIMS = (1, 10)
 LIKERT_TICKS = list(range(1, 11))
+BOX_WIDTH = 0.30
+POINT_DODGE = 0.32
+JITTER_POINT_SIZE = 2.0
+JITTER_ALPHA = 0.30
+MEAN_MARKER_SIZE = 18
+MEAN_MARKER = "D"
+MEAN_ZORDER = 7
 
 
 def _exclude_subjects(df: pd.DataFrame, text: str) -> pd.DataFrame:
@@ -313,23 +320,36 @@ def _get_grouped_palette(sub: pd.DataFrame, hue: str | None) -> dict | None:
     return {str(level): colors[i] for i, level in enumerate(levels)}
 
 
+def _resolve_plot_groups(sub: pd.DataFrame, xcol: str | None, hue: str | None) -> tuple[str | None, list | None, str | None, list | None]:
+    x_arg = xcol if xcol and xcol in sub.columns else None
+    hue_arg = hue if hue and hue in sub.columns and hue != x_arg else None
+    x_order = _get_order(sub[x_arg]) if x_arg else None
+    hue_order = _get_order(sub[hue_arg]) if hue_arg else None
+    return x_arg, x_order, hue_arg, hue_order
+
+
+def _assert_hue_geometry(hue_order: list | None) -> None:
+    if hue_order and len(hue_order) == 2:
+        center_gap = POINT_DODGE
+        assert center_gap > BOX_WIDTH, f"Geometry regression: center_gap={center_gap:.3f} must be > box_width={BOX_WIDTH:.3f}."
+
+
 def _plot_box(ax, sub: pd.DataFrame, dv: str, xcol: str | None, hue: str | None, palette) -> None:
-    if xcol and xcol in sub.columns:
-        hue_arg = hue if hue in sub.columns and hue != xcol else xcol
-        x_order = _get_order(sub[xcol])
-        hue_order = _get_order(sub[hue_arg]) if hue_arg and hue_arg in sub.columns else None
+    x_arg, x_order, hue_arg, hue_order = _resolve_plot_groups(sub, xcol, hue)
+    _assert_hue_geometry(hue_order)
+    if x_arg:
         sns.boxplot(
             data=sub,
-            x=xcol,
+            x=x_arg,
             y=dv,
             hue=hue_arg,
             order=x_order,
             hue_order=hue_order,
             palette=palette,
-            width=0.42,
+            width=BOX_WIDTH,
             fliersize=0,
             linewidth=1.05,
-            dodge=(hue_arg != xcol),
+            dodge=bool(hue_arg),
             saturation=0.88,
             boxprops=dict(alpha=0.42),
             whiskerprops=dict(alpha=0.9),
@@ -339,15 +359,17 @@ def _plot_box(ax, sub: pd.DataFrame, dv: str, xcol: str | None, hue: str | None,
         )
         sns.pointplot(
             data=sub,
-            x=xcol,
+            x=x_arg,
             y=dv,
             hue=hue_arg,
             order=x_order,
             hue_order=hue_order,
             palette=palette,
-            dodge=0.52 if hue_arg != xcol else False,
+            dodge=POINT_DODGE if hue_arg else False,
             join=False,
-            markers="D",
+            markers=MEAN_MARKER,
+            scale=0.62,
+            zorder=MEAN_ZORDER,
             ax=ax,
         )
     else:
@@ -355,7 +377,7 @@ def _plot_box(ax, sub: pd.DataFrame, dv: str, xcol: str | None, hue: str | None,
             data=sub,
             y=dv,
             color="#D7E7F5",
-            width=0.28,
+            width=BOX_WIDTH,
             fliersize=0,
             linewidth=1.05,
             boxprops=dict(alpha=0.5),
@@ -363,65 +385,65 @@ def _plot_box(ax, sub: pd.DataFrame, dv: str, xcol: str | None, hue: str | None,
             ax=ax,
         )
         mean = pd.to_numeric(sub[dv], errors="coerce").mean()
-        ax.scatter([0], [mean], marker="D", s=28, color="#2F3B46", zorder=4)
+        ax.scatter([0], [mean], marker=MEAN_MARKER, s=MEAN_MARKER_SIZE, color="#2F3B46", zorder=MEAN_ZORDER)
 
 
 def _plot_jitter(ax, sub: pd.DataFrame, dv: str, xcol: str | None, hue: str | None, palette) -> None:
-    if xcol and xcol in sub.columns:
-        hue_arg = hue if hue in sub.columns and hue != xcol else xcol
-        x_order = _get_order(sub[xcol])
-        hue_order = _get_order(sub[hue_arg]) if hue_arg and hue_arg in sub.columns else None
+    x_arg, x_order, hue_arg, hue_order = _resolve_plot_groups(sub, xcol, hue)
+    _assert_hue_geometry(hue_order)
+    if x_arg:
         sns.stripplot(
             data=sub,
-            x=xcol,
+            x=x_arg,
             y=dv,
             hue=hue_arg,
             order=x_order,
             hue_order=hue_order,
             palette=palette,
-            dodge=(hue_arg != xcol),
+            dodge=bool(hue_arg),
             jitter=0.11,
-            size=2.4,
-            alpha=0.35,
+            size=JITTER_POINT_SIZE,
+            alpha=JITTER_ALPHA,
             linewidth=0,
             ax=ax,
         )
         sns.pointplot(
             data=sub,
-            x=xcol,
+            x=x_arg,
             y=dv,
             hue=hue_arg,
             order=x_order,
             hue_order=hue_order,
             palette=palette,
-            dodge=0.52 if hue_arg != xcol else False,
+            dodge=POINT_DODGE if hue_arg else False,
             join=False,
-            markers="D",
+            markers=MEAN_MARKER,
+            scale=0.62,
+            zorder=MEAN_ZORDER,
             ax=ax,
         )
     else:
-        sns.stripplot(data=sub, y=dv, color="#6FA8DC", jitter=0.08, size=2.4, alpha=0.32, linewidth=0, ax=ax)
+        sns.stripplot(data=sub, y=dv, color="#6FA8DC", jitter=0.08, size=JITTER_POINT_SIZE, alpha=JITTER_ALPHA, linewidth=0, ax=ax)
         mean = pd.to_numeric(sub[dv], errors="coerce").mean()
-        ax.scatter([0], [mean], marker="D", s=28, color="#2F3B46", zorder=4)
+        ax.scatter([0], [mean], marker=MEAN_MARKER, s=MEAN_MARKER_SIZE, color="#2F3B46", zorder=MEAN_ZORDER)
 
 
 def _plot_box_mean_ci(ax, sub: pd.DataFrame, dv: str, xcol: str | None, hue: str | None, palette) -> None:
-    if xcol and xcol in sub.columns:
-        hue_arg = hue if hue in sub.columns and hue != xcol else xcol
-        x_order = _get_order(sub[xcol])
-        hue_order = _get_order(sub[hue_arg]) if hue_arg and hue_arg in sub.columns else None
+    x_arg, x_order, hue_arg, hue_order = _resolve_plot_groups(sub, xcol, hue)
+    _assert_hue_geometry(hue_order)
+    if x_arg:
         sns.boxplot(
             data=sub,
-            x=xcol,
+            x=x_arg,
             y=dv,
             hue=hue_arg,
             order=x_order,
             hue_order=hue_order,
             palette=palette,
-            width=0.40,
+            width=BOX_WIDTH,
             fliersize=0,
             linewidth=1.0,
-            dodge=(hue_arg != xcol),
+            dodge=bool(hue_arg),
             boxprops=dict(alpha=0.34),
             whiskerprops=dict(alpha=0.88),
             medianprops=dict(color="#2F3B46", linewidth=1.2),
@@ -429,15 +451,17 @@ def _plot_box_mean_ci(ax, sub: pd.DataFrame, dv: str, xcol: str | None, hue: str
         )
         sns.pointplot(
             data=sub,
-            x=xcol,
+            x=x_arg,
             y=dv,
             hue=hue_arg,
             order=x_order,
             hue_order=hue_order,
             palette=palette,
-            dodge=0.36 if hue_arg != xcol else False,
+            dodge=POINT_DODGE if hue_arg else False,
             ci=95,
-            markers="D",
+            markers=MEAN_MARKER,
+            scale=0.62,
+            zorder=MEAN_ZORDER,
             ax=ax,
         )
     else:
@@ -445,7 +469,7 @@ def _plot_box_mean_ci(ax, sub: pd.DataFrame, dv: str, xcol: str | None, hue: str
             data=sub,
             y=dv,
             color="#C9D7E8",
-            width=0.34,
+            width=BOX_WIDTH,
             fliersize=0,
             linewidth=1.0,
             boxprops=dict(alpha=0.32),
@@ -453,17 +477,16 @@ def _plot_box_mean_ci(ax, sub: pd.DataFrame, dv: str, xcol: str | None, hue: str
         )
         mean = pd.to_numeric(sub[dv], errors="coerce").mean()
         low, high = _ci95(sub[dv])
-        ax.errorbar([0], [mean], yerr=[[mean - low], [high - mean]], fmt="D", color="#2F3B46", capsize=4, lw=1.0)
+        ax.errorbar([0], [mean], yerr=[[mean - low], [high - mean]], fmt=MEAN_MARKER, color="#2F3B46", capsize=4, lw=1.0, zorder=MEAN_ZORDER)
 
 
 def _plot_violin(ax, sub: pd.DataFrame, dv: str, xcol: str | None, hue: str | None, palette) -> None:
-    if xcol and xcol in sub.columns:
-        hue_arg = hue if hue in sub.columns and hue != xcol else xcol
-        x_order = _get_order(sub[xcol])
-        hue_order = _get_order(sub[hue_arg]) if hue_arg and hue_arg in sub.columns else None
+    x_arg, x_order, hue_arg, hue_order = _resolve_plot_groups(sub, xcol, hue)
+    _assert_hue_geometry(hue_order)
+    if x_arg:
         sns.violinplot(
             data=sub,
-            x=xcol,
+            x=x_arg,
             y=dv,
             hue=hue_arg,
             order=x_order,
@@ -473,21 +496,21 @@ def _plot_violin(ax, sub: pd.DataFrame, dv: str, xcol: str | None, hue: str | No
             cut=0,
             linewidth=0.85,
             saturation=0.58,
-            dodge=(hue_arg != xcol),
+            dodge=bool(hue_arg),
             ax=ax,
         )
         sns.boxplot(
             data=sub,
-            x=xcol,
+            x=x_arg,
             y=dv,
             hue=hue_arg,
             order=x_order,
             hue_order=hue_order,
             palette=palette,
-            width=0.18,
+            width=BOX_WIDTH * 0.6,
             fliersize=0,
             linewidth=0.95,
-            dodge=(hue_arg != xcol),
+            dodge=bool(hue_arg),
             boxprops=dict(alpha=0.5),
             whiskerprops=dict(alpha=0.9),
             medianprops=dict(color="#2F3B46", linewidth=1.15),
@@ -495,23 +518,25 @@ def _plot_violin(ax, sub: pd.DataFrame, dv: str, xcol: str | None, hue: str | No
         )
         sns.pointplot(
             data=sub,
-            x=xcol,
+            x=x_arg,
             y=dv,
             hue=hue_arg,
             order=x_order,
             hue_order=hue_order,
             palette=palette,
-            dodge=0.36 if hue_arg != xcol else False,
+            dodge=POINT_DODGE if hue_arg else False,
             ci=95,
-            markers="D",
+            markers=MEAN_MARKER,
+            scale=0.62,
+            zorder=MEAN_ZORDER,
             ax=ax,
         )
     else:
         sns.violinplot(data=sub, y=dv, color="#D5E1EF", inner=None, cut=0, linewidth=0.9, saturation=0.72, ax=ax)
-        sns.boxplot(data=sub, y=dv, color="#AFC3DD", width=0.16, fliersize=0, linewidth=0.95, boxprops=dict(alpha=0.55), ax=ax)
+        sns.boxplot(data=sub, y=dv, color="#AFC3DD", width=BOX_WIDTH * 0.55, fliersize=0, linewidth=0.95, boxprops=dict(alpha=0.55), ax=ax)
         mean = pd.to_numeric(sub[dv], errors="coerce").mean()
         low, high = _ci95(sub[dv])
-        ax.errorbar([0], [mean], yerr=[[mean - low], [high - mean]], fmt="D", color="#2F3B46", capsize=4, lw=1.0)
+        ax.errorbar([0], [mean], yerr=[[mean - low], [high - mean]], fmt=MEAN_MARKER, color="#2F3B46", capsize=4, lw=1.0, zorder=MEAN_ZORDER)
 
 
 def _dedupe_legend(ax) -> None:
