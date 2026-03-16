@@ -177,7 +177,13 @@ def _summary_box(ax, title: str, lines: list[str]) -> None:
     )
 
 
-def _cluster_annotation_map(sub: pd.DataFrame, dv: str, xcol: str | None, hue: str | None) -> dict[str, list[str]]:
+def _cluster_annotation_map(
+    sub: pd.DataFrame,
+    dv: str,
+    xcol: str | None,
+    hue: str | None,
+    show_full_stats: bool,
+) -> dict[str, list[str]]:
     if not xcol or xcol not in sub.columns:
         return {"ALL": _annotation_lines(sub, dv, group_col=(hue if hue in sub.columns else None))}
 
@@ -192,10 +198,16 @@ def _cluster_annotation_map(sub: pd.DataFrame, dv: str, xcol: str | None, hue: s
             cluster_lines = []
             for hv, sh in sx.groupby(use_hue, dropna=False):
                 st = _desc_stats(sh[dv], sh["SubjectID"] if "SubjectID" in sh.columns else None)
-                cluster_lines.append(f"{_format_group_value(hv)}: M={_fmt_num(st['mean'])}, SD={_fmt_num(st['sd'])}")
+                if show_full_stats:
+                    cluster_lines.append(f"{_format_group_value(hv)}: n={st['n']}, M={_fmt_num(st['mean'])}, SD={_fmt_num(st['sd'])}")
+                else:
+                    cluster_lines.append(f"{_format_group_value(hv)}: n={st['n']}")
         else:
             st = _desc_stats(sx[dv], sx["SubjectID"] if "SubjectID" in sx.columns else None)
-            cluster_lines = [f"M={_fmt_num(st['mean'])}, SD={_fmt_num(st['sd'])}"]
+            if show_full_stats:
+                cluster_lines = [f"n={st['n']}, M={_fmt_num(st['mean'])}, SD={_fmt_num(st['sd'])}"]
+            else:
+                cluster_lines = [f"n={st['n']}"]
         lines_map[str(xv)] = cluster_lines
     return lines_map
 
@@ -212,51 +224,50 @@ def _sample_size_legend_lines(sub: pd.DataFrame, hue: str | None = None) -> list
 
 
 def _annotate_cluster_stats(ax, sub: pd.DataFrame, dv: str, xcol: str | None, hue: str | None = None) -> None:
-    lines_map = _cluster_annotation_map(sub, dv, xcol, hue)
+    show_full_stats = True
+    if xcol and xcol in sub.columns:
+        show_full_stats = len(_get_order(sub[xcol])) <= 3
+
+    lines_map = _cluster_annotation_map(sub, dv, xcol, hue, show_full_stats)
     if not lines_map:
         return
-
-    y0, y1 = ax.get_ylim()
-    yr = y1 - y0
-    if yr <= 0:
-        yr = 1.0
-
-    top_pad = max(0.65, yr * 0.22)
-    ax.set_ylim(y0, y1 + top_pad)
-    y_text = y1 + top_pad * 0.92
 
     if not xcol or xcol not in sub.columns:
         text = "\n".join(lines_map.get("ALL", []))
         ax.text(
             0,
-            y_text,
+            -0.16,
             text,
+            transform=ax.get_xaxis_transform(),
             ha="center",
-            va="top",
-            fontsize=7.9,
+            va="center",
+            fontsize=7.4,
             color="#4E5E6A",
-            bbox=dict(boxstyle="round,pad=0.28", fc="white", ec="#D7E0E8", lw=0.7, alpha=0.95),
             clip_on=False,
             zorder=6,
         )
     else:
+        trans = ax.get_xaxis_transform()
+        base_y = -0.16
+        line_step = 0.08
         x_order = _get_order(sub[xcol])
         for i, xv in enumerate(x_order):
-            text = "\n".join(lines_map.get(str(xv), []))
-            if not text:
+            lines = lines_map.get(str(xv), [])
+            if not lines:
                 continue
-            ax.text(
-                i,
-                y_text,
-                text,
-                ha="center",
-                va="top",
-                fontsize=7.5,
-                color="#4E5E6A",
-                bbox=dict(boxstyle="round,pad=0.24", fc="white", ec="#D7E0E8", lw=0.7, alpha=0.95),
-                clip_on=False,
-                zorder=6,
-            )
+            for j, line in enumerate(lines):
+                ax.text(
+                    i,
+                    base_y - j * line_step,
+                    line,
+                    transform=trans,
+                    ha="center",
+                    va="center",
+                    fontsize=7.3,
+                    color="#4E5E6A",
+                    clip_on=False,
+                    zorder=6,
+                )
 
     legend_lines = _sample_size_legend_lines(sub, hue)
     ax.text(
@@ -551,7 +562,10 @@ def _plot_distribution_panels(df: pd.DataFrame, cols: list[str], out_dir: Path, 
             _finalize_axis(ax, dv, xcol, _publication_title(dv, xcol, hue if hue != xcol else None, kind_label))
             _annotate_cluster_stats(ax, sub, dv, xcol, hue if hue in sub.columns and hue != xcol else None)
             _dedupe_legend(ax)
-            fig.tight_layout()
+            if xcol and xcol in sub.columns:
+                fig.tight_layout(rect=(0, 0.09, 1, 1))
+            else:
+                fig.tight_layout()
             path = out_dir / f"{prefix}_{dv}_{kind_key}.png"
             fig.savefig(path, dpi=300, bbox_inches="tight")
             plt.close(fig)
