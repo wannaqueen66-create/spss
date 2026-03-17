@@ -7,11 +7,11 @@ import matplotlib as mpl
 import seaborn as sns
 
 PUBLICATION_PALETTE = [
-    "#A9C5D3",  # muted light blue-gray
-    "#5F8FA8",  # balanced teal-blue
-    "#355C7D",  # deep slate blue
-    "#D8C3A5",  # soft sand
-    "#C08B7A",  # muted terracotta
+    "#6E8FA8",  # low-saturation blue for primary low-level group
+    "#D89B72",  # low-saturation warm orange for primary high-level group
+    "#9FB8C9",  # pale support blue
+    "#E4C3A8",  # pale support sand
+    "#7E8F9E",  # muted slate support
     "#B9C0C8",  # cool gray
 ]
 
@@ -28,17 +28,17 @@ def apply_bae_style() -> None:
         "axes.labelsize": 10,
         "xtick.labelsize": 9,
         "ytick.labelsize": 9,
-        "legend.fontsize": 8.8,
+        "legend.fontsize": 8.6,
         "figure.titlesize": 11,
         "figure.dpi": 220,
         "savefig.dpi": 300,
         "savefig.bbox": "tight",
         "axes.linewidth": 0.8,
-        "grid.linewidth": 0.55,
-        "grid.alpha": 0.22,
+        "grid.linewidth": 0.50,
+        "grid.alpha": 0.20,
         "grid.color": "#D9DEE5",
-        "lines.linewidth": 1.6,
-        "lines.markersize": 5.2,
+        "lines.linewidth": 1.5,
+        "lines.markersize": 5.0,
         "axes.facecolor": "white",
         "figure.facecolor": "white",
         "axes.edgecolor": "#C7CDD4",
