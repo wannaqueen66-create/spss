@@ -9,9 +9,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
-from scipy.stats import skew, kurtosis, shapiro, sem, t
-
-from plot_style import apply_bae_style, get_publication_palette
+from scipy.stats import kurtosis, sem, shapiro, skew, t
 
 QC_EXCLUDE = "孙校聪,康少勇,张钰鹏,杨可,洪婷婷,陈韬,高梓楠,赵国宏"
 S_COLS = ["S1", "S2", "S3", "S4", "S5"]
@@ -19,16 +17,70 @@ B_COLS = ["B1", "B2", "B3", "Bmean"]
 IPQ_COLS = ["IPQ1", "IPQ2", "IPQ3", "IPQ4", "IPQ5", "IPQ6", "IPQ_mean"]
 LIKERT_LIMS = (1, 10)
 LIKERT_TICKS = list(range(1, 11))
-BOX_WIDTH = 0.22
-POINT_DODGE = 0.42
-JITTER_POINT_SIZE = 1.4
-JITTER_ALPHA = 0.16
-MEAN_MARKER_SIZE = 20
-MEAN_MARKER = "D"
-MEAN_ZORDER = 8
-LOW_HIGH_PALETTE = ["#6E8FA8", "#D89B72"]
-SINGLE_GROUP_COLOR = "#9FB8C9"
-EDGE_COLOR = "#2F3B46"
+
+PALETTE = {
+    "blue": "#6F97BD",
+    "orange": "#E3A86F",
+    "ink": "#243447",
+    "grid": "#E5ECF2",
+    "muted": "#6B7C8F",
+    "light_blue": "#E8F1F8",
+    "light_orange": "#FAEBDD",
+    "gray": "#A8B2BC",
+}
+
+SINGLE_GROUP_FILL = PALETTE["light_blue"]
+SINGLE_GROUP_EDGE = PALETTE["blue"]
+ANNOTATION_TEXT = PALETTE["ink"]
+STRIP_FALLBACK = "#7A8896"
+
+
+def apply_publication_style() -> None:
+    sns.set_theme(style="white", context="notebook")
+    plt.rcParams.update({
+        "figure.facecolor": "white",
+        "axes.facecolor": "white",
+        "axes.edgecolor": PALETTE["ink"],
+        "axes.labelcolor": PALETTE["ink"],
+        "axes.titlecolor": PALETTE["ink"],
+        "axes.spines.top": False,
+        "axes.spines.right": False,
+        "axes.linewidth": 0.9,
+        "axes.grid": False,
+        "grid.color": PALETTE["grid"],
+        "grid.alpha": 0.7,
+        "grid.linewidth": 0.7,
+        "font.family": "DejaVu Sans",
+        "font.size": 9.5,
+        "axes.titlesize": 11.5,
+        "axes.titleweight": "semibold",
+        "axes.labelsize": 10,
+        "legend.fontsize": 8.8,
+        "legend.title_fontsize": 9,
+        "xtick.labelsize": 8.8,
+        "ytick.labelsize": 8.8,
+        "xtick.color": PALETTE["ink"],
+        "ytick.color": PALETTE["ink"],
+        "xtick.major.width": 0.8,
+        "ytick.major.width": 0.8,
+        "savefig.dpi": 320,
+        "savefig.bbox": "tight",
+        "savefig.pad_inches": 0.08,
+        "legend.frameon": False,
+        "patch.linewidth": 0.9,
+        "figure.titleweight": "semibold",
+    })
+
+
+def soften_axes(ax, grid_axis: str = "y") -> None:
+    ax.spines["left"].set_color(PALETTE["ink"])
+    ax.spines["bottom"].set_color(PALETTE["ink"])
+    ax.spines["left"].set_linewidth(0.9)
+    ax.spines["bottom"].set_linewidth(0.9)
+    ax.tick_params(axis="both", colors=PALETTE["ink"], length=3)
+    ax.grid(axis=grid_axis, color=PALETTE["grid"], alpha=0.7, linewidth=0.7)
+    other = "x" if grid_axis == "y" else "y"
+    ax.grid(axis=other, visible=False)
 
 
 def _exclude_subjects(df: pd.DataFrame, text: str) -> pd.DataFrame:
@@ -93,8 +145,7 @@ def _desc_table(df: pd.DataFrame, cols: list[str], group_cols: list[str] | None 
 
     group_cols = group_cols or []
     if group_cols:
-        grouped = df.groupby(group_cols, dropna=False)
-        iter_items = list(grouped)
+        iter_items = list(df.groupby(group_cols, dropna=False))
     else:
         iter_items = [((), df.copy())]
 
@@ -119,124 +170,6 @@ def _fmt_num(v: float | None, nd: int = 2) -> str:
     return f"{float(v):.{nd}f}"
 
 
-def _format_group_value(v) -> str:
-    if pd.isna(v):
-        return "NA"
-    try:
-        fv = float(v)
-        if fv.is_integer():
-            return str(int(fv))
-    except Exception:
-        pass
-    return str(v)
-
-
-def _annotation_lines(sub: pd.DataFrame, dv: str, group_col: str | None = None) -> list[str]:
-    if group_col and group_col in sub.columns:
-        lines = []
-        for g, sg in sub.groupby(group_col, dropna=False):
-            st = _desc_stats(sg[dv], sg["SubjectID"] if "SubjectID" in sg.columns else None)
-            lines.append(f"{_format_group_value(g)}: n={st['n']}, M={_fmt_num(st['mean'])}±{_fmt_num(st['sd'])}")
-        return lines
-    st = _desc_stats(sub[dv], sub["SubjectID"] if "SubjectID" in sub.columns else None)
-    return [f"n={st['n']}, M={_fmt_num(st['mean'])}±{_fmt_num(st['sd'])}"]
-
-
-def _publication_title(dv: str, xcol: str | None, hue: str | None, kind_label: str) -> str:
-    if xcol and hue and xcol != hue:
-        return f"{dv} by {xcol} and {hue} ({kind_label})"
-    if xcol:
-        return f"{dv} across {xcol} ({kind_label})"
-    if hue:
-        return f"{dv} by {hue} ({kind_label})"
-    return f"{dv} distribution ({kind_label})"
-
-
-def _set_likert_axis(ax, dv: str) -> None:
-    dv_upper = dv.upper()
-    if dv_upper.startswith("S") or dv_upper.startswith("B") or dv_upper.startswith("IPQ"):
-        ax.set_ylim(*LIKERT_LIMS)
-        ax.set_yticks(LIKERT_TICKS)
-
-
-def _finalize_axis(ax, dv: str, xcol: str | None, title: str) -> None:
-    ax.set_title(title, pad=8)
-    ax.set_xlabel(xcol if xcol else "")
-    ax.set_ylabel(dv)
-    ax.tick_params(axis="x", rotation=0)
-    ax.grid(axis="y", linestyle="-", linewidth=0.55, alpha=0.22)
-    ax.grid(axis="x", visible=False)
-    _set_likert_axis(ax, dv)
-
-
-def _cluster_annotation_map(
-    sub: pd.DataFrame,
-    dv: str,
-    xcol: str | None,
-    hue: str | None,
-    show_full_stats: bool,
-) -> dict[str, list[str]]:
-    if not xcol or xcol not in sub.columns:
-        return {"ALL": _annotation_lines(sub, dv, group_col=(hue if hue in sub.columns else None))}
-
-    lines_map: dict[str, list[str]] = {}
-    x_order = _get_order(sub[xcol])
-    use_hue = hue if hue and hue in sub.columns and hue != xcol else None
-    for xv in x_order:
-        sx = sub[sub[xcol] == xv]
-        if sx.empty:
-            continue
-        if use_hue:
-            cluster_lines = []
-            for hv, sh in sx.groupby(use_hue, dropna=False):
-                st = _desc_stats(sh[dv], sh["SubjectID"] if "SubjectID" in sh.columns else None)
-                if show_full_stats:
-                    cluster_lines.append(f"{_format_group_value(hv)}: n={st['n']}, M={_fmt_num(st['mean'])}, SD={_fmt_num(st['sd'])}")
-                else:
-                    cluster_lines.append(f"{_format_group_value(hv)}: n={st['n']}")
-        else:
-            st = _desc_stats(sx[dv], sx["SubjectID"] if "SubjectID" in sx.columns else None)
-            if show_full_stats:
-                cluster_lines = [f"n={st['n']}, M={_fmt_num(st['mean'])}, SD={_fmt_num(st['sd'])}"]
-            else:
-                cluster_lines = [f"n={st['n']}"]
-        lines_map[str(xv)] = cluster_lines
-    return lines_map
-
-
-def _sample_size_legend_lines(sub: pd.DataFrame, hue: str | None = None) -> list[str]:
-    if hue and hue in sub.columns:
-        lines = []
-        for hv, sh in sub.groupby(hue, dropna=False):
-            n = sh["SubjectID"].astype(str).str.strip().nunique() if "SubjectID" in sh.columns else len(sh)
-            lines.append(f"{_format_group_value(hv)}: n={n}")
-        return lines
-    n = sub["SubjectID"].astype(str).str.strip().nunique() if "SubjectID" in sub.columns else len(sub)
-    return [f"Total participants: n={n}"]
-
-
-def _build_right_summary_lines(sub: pd.DataFrame, dv: str, xcol: str | None, hue: str | None = None) -> list[str]:
-    show_full_stats = True
-    if xcol and xcol in sub.columns:
-        show_full_stats = len(_get_order(sub[xcol])) <= 3
-    lines_map = _cluster_annotation_map(sub, dv, xcol, hue, show_full_stats)
-    lines: list[str] = []
-    if not xcol or xcol not in sub.columns:
-        lines.extend(lines_map.get("ALL", []))
-    else:
-        x_order = _get_order(sub[xcol])
-        for xv in x_order:
-            x_lines = lines_map.get(str(xv), [])
-            if not x_lines:
-                continue
-            lines.append(f"{_format_group_value(xv)}:")
-            lines.extend([f"  {line}" for line in x_lines])
-    if lines:
-        lines.append("")
-    lines.extend(_sample_size_legend_lines(sub, hue))
-    return lines
-
-
 def _normalize_category_value(v):
     if pd.isna(v):
         return np.nan
@@ -249,7 +182,7 @@ def _normalize_category_value(v):
         return str(v)
 
 
-def _get_order(series: pd.Series) -> list:
+def _get_order(series: pd.Series) -> list[str]:
     vals = [_normalize_category_value(v) for v in series.dropna().unique().tolist()]
     vals = [v for v in vals if pd.notna(v)]
     try:
@@ -258,17 +191,25 @@ def _get_order(series: pd.Series) -> list:
         return sorted(vals, key=lambda x: str(x))
 
 
-def _get_grouped_palette(sub: pd.DataFrame, hue: str | None) -> dict | None:
-    if not hue or hue not in sub.columns:
-        return None
-    levels = _get_order(sub[hue])
+def _get_palette_for_levels(levels: list[str]) -> dict[str, str]:
+    if not levels:
+        return {}
+    if len(levels) == 1:
+        return {str(levels[0]): SINGLE_GROUP_EDGE}
     if len(levels) == 2:
-        return {str(levels[0]): LOW_HIGH_PALETTE[0], str(levels[1]): LOW_HIGH_PALETTE[1]}
-    colors = get_publication_palette(len(levels))
-    return {str(level): colors[i] for i, level in enumerate(levels)}
+        return {str(levels[0]): PALETTE["blue"], str(levels[1]): PALETTE["orange"]}
+    fallback = [
+        PALETTE["blue"],
+        PALETTE["orange"],
+        "#8FB7A1",
+        "#A99AC6",
+        "#D3A6C6",
+        PALETTE["gray"],
+    ]
+    return {str(level): fallback[i % len(fallback)] for i, level in enumerate(levels)}
 
 
-def _resolve_plot_groups(sub: pd.DataFrame, xcol: str | None, hue: str | None) -> tuple[str | None, list | None, str | None, list | None]:
+def _resolve_plot_groups(sub: pd.DataFrame, xcol: str | None, hue: str | None) -> tuple[str | None, list[str] | None, str | None, list[str] | None]:
     x_arg = xcol if xcol and xcol in sub.columns else None
     hue_arg = hue if hue and hue in sub.columns and hue != x_arg else None
     x_order = _get_order(sub[x_arg]) if x_arg else None
@@ -276,277 +217,296 @@ def _resolve_plot_groups(sub: pd.DataFrame, xcol: str | None, hue: str | None) -
     return x_arg, x_order, hue_arg, hue_order
 
 
-def _assert_hue_geometry(hue_order: list | None) -> None:
-    if hue_order and len(hue_order) == 2:
-        center_gap = POINT_DODGE
-        assert center_gap > BOX_WIDTH, f"Geometry regression: center_gap={center_gap:.3f} must be > box_width={BOX_WIDTH:.3f}."
+def _cluster_center(index: int, hue_index: int, n_hue: int) -> float:
+    if n_hue <= 1:
+        return float(index)
+    offsets = np.linspace(-0.20, 0.20, n_hue)
+    return float(index) + float(offsets[hue_index])
 
 
-def _group_stats_text(sub: pd.DataFrame, dv: str, group_cols: list[str]) -> list[tuple[tuple, str]]:
-    rows: list[tuple[tuple, str]] = []
-    for keys, sg in sub.groupby(group_cols, dropna=False):
-        if not isinstance(keys, tuple):
-            keys = (keys,)
-        st = _desc_stats(sg[dv], sg["SubjectID"] if "SubjectID" in sg.columns else None)
-        label = f"n={st['n']}, M={_fmt_num(st['mean'])}, SD={_fmt_num(st['sd'])}"
-        rows.append((tuple(str(k) for k in keys), label))
+def _group_summary_rows(sub: pd.DataFrame, dv: str, xcol: str | None, hue: str | None) -> list[dict]:
+    x_arg, x_order, hue_arg, hue_order = _resolve_plot_groups(sub, xcol, hue)
+    rows: list[dict] = []
+
+    if x_arg:
+        for i, xv in enumerate(x_order or []):
+            subx = sub[sub[x_arg].astype(str) == str(xv)]
+            if hue_arg:
+                for j, hv in enumerate(hue_order or []):
+                    sg = subx[subx[hue_arg].astype(str) == str(hv)]
+                    vals = pd.to_numeric(sg[dv], errors="coerce").dropna()
+                    if vals.empty:
+                        continue
+                    low, high = _ci95(vals)
+                    rows.append({
+                        "x": _cluster_center(i, j, len(hue_order or [])),
+                        "mean": float(vals.mean()),
+                        "ci_low": low,
+                        "ci_high": high,
+                        "n": int(sg["SubjectID"].astype(str).str.strip().nunique()) if "SubjectID" in sg.columns else int(len(vals)),
+                        "color": _get_palette_for_levels(hue_order or []).get(str(hv), SINGLE_GROUP_EDGE),
+                    })
+            else:
+                vals = pd.to_numeric(subx[dv], errors="coerce").dropna()
+                if vals.empty:
+                    continue
+                low, high = _ci95(vals)
+                rows.append({
+                    "x": float(i),
+                    "mean": float(vals.mean()),
+                    "ci_low": low,
+                    "ci_high": high,
+                    "n": int(subx["SubjectID"].astype(str).str.strip().nunique()) if "SubjectID" in subx.columns else int(len(vals)),
+                    "color": SINGLE_GROUP_EDGE,
+                })
+        return rows
+
+    vals = pd.to_numeric(sub[dv], errors="coerce").dropna()
+    if vals.empty:
+        return rows
+    low, high = _ci95(vals)
+    rows.append({
+        "x": 0.0,
+        "mean": float(vals.mean()),
+        "ci_low": low,
+        "ci_high": high,
+        "n": int(sub["SubjectID"].astype(str).str.strip().nunique()) if "SubjectID" in sub.columns else int(len(vals)),
+        "color": SINGLE_GROUP_EDGE,
+    })
     return rows
 
 
-def _overlay_mean_ci_no_line(ax, sub: pd.DataFrame, dv: str, xcol: str | None, hue: str | None, palette: dict) -> None:
-    x_arg, x_order, hue_arg, hue_order = _resolve_plot_groups(sub, xcol, hue)
-    if not x_arg:
+def _annotate_group_summaries(ax, summary_rows: list[dict], dv: str) -> None:
+    if not summary_rows:
         return
-    stats = _group_stats_text(sub, dv, [c for c in [x_arg, hue_arg] if c])
-    hue_levels = hue_order if hue_arg else [None]
-    offsets = np.linspace(-POINT_DODGE / 2, POINT_DODGE / 2, len(hue_levels)) if hue_arg else [0.0]
-    for i, xv in enumerate(x_order):
-        for j, hv in enumerate(hue_levels):
-            xpos = float(i) + float(offsets[j])
-            if hue_arg:
-                sg = sub[(sub[x_arg].astype(str) == str(xv)) & (sub[hue_arg].astype(str) == str(hv))]
-                key = (str(xv), str(hv))
-                color = palette.get(str(hv), EDGE_COLOR)
-            else:
-                sg = sub[sub[x_arg].astype(str) == str(xv)]
-                key = (str(xv),)
-                color = EDGE_COLOR
-            vals = pd.to_numeric(sg[dv], errors="coerce").dropna()
-            if vals.empty:
-                continue
-            mean = float(vals.mean())
-            low, high = _ci95(vals)
-            ax.errorbar([xpos], [mean], yerr=[[mean - low], [high - mean]], fmt=MEAN_MARKER, color=color, capsize=4, lw=1.0, zorder=MEAN_ZORDER)
-            stat_text = next((txt for keys, txt in stats if keys == key), None)
-            if stat_text:
-                y_anchor = high if pd.notna(high) else mean
-                ax.annotate(stat_text, xy=(xpos, y_anchor), xytext=(0, 8), textcoords="offset points", ha="center", va="bottom", fontsize=6.8, color="#4B5A66", bbox=dict(boxstyle="round,pad=0.18", fc="white", ec="none", alpha=0.90), zorder=6)
+    ymin, ymax = ax.get_ylim()
+    span = max(float(ymax) - float(ymin), 1.0)
+    placed: list[tuple[float, float]] = []
+    for idx, row in enumerate(summary_rows):
+        anchor_y = row["ci_high"] if pd.notna(row["ci_high"]) else row["mean"]
+        text_y = float(anchor_y) + 0.04 * span
+        for px, py in placed:
+            if abs(float(row["x"]) - px) < 0.30 and abs(text_y - py) < 0.08 * span:
+                text_y += 0.06 * span
+        ci_text = f"[{_fmt_num(row['ci_low'])}, {_fmt_num(row['ci_high'])}]" if pd.notna(row["ci_low"]) and pd.notna(row["ci_high"]) else "[NA, NA]"
+        label = f"M={_fmt_num(row['mean'])}\n95% CI {ci_text}\nn={row['n']}"
+        ax.annotate(
+            label,
+            xy=(row["x"], anchor_y),
+            xytext=(0, 6 if idx % 2 == 0 else 8),
+            textcoords="offset points",
+            ha="center",
+            va="bottom",
+            fontsize=6.7,
+            color=ANNOTATION_TEXT,
+            bbox=dict(boxstyle="round,pad=0.18", facecolor="white", edgecolor="none", alpha=0.94),
+            zorder=8,
+        )
+        placed.append((float(row["x"]), text_y))
 
 
-def _plot_box(ax, sub: pd.DataFrame, dv: str, xcol: str | None, hue: str | None, palette) -> None:
-    x_arg, x_order, hue_arg, hue_order = _resolve_plot_groups(sub, xcol, hue)
-    _assert_hue_geometry(hue_order)
-    if x_arg:
-        sns.boxplot(
-            data=sub,
-            x=x_arg,
-            y=dv,
-            hue=hue_arg,
-            order=x_order,
-            hue_order=hue_order,
-            palette=palette,
-            width=BOX_WIDTH,
-            fliersize=0,
-            linewidth=1.05,
-            dodge=bool(hue_arg),
-            saturation=0.88,
-            boxprops=dict(alpha=0.42),
-            whiskerprops=dict(alpha=0.9),
-            capprops=dict(alpha=0.9),
-            medianprops=dict(color=EDGE_COLOR, linewidth=1.25),
-            ax=ax,
-        )
-        sns.pointplot(
-            data=sub,
-            x=x_arg,
-            y=dv,
-            hue=hue_arg,
-            order=x_order,
-            hue_order=hue_order,
-            palette=palette,
-            dodge=POINT_DODGE if hue_arg else False,
-            join=False,
-            markers=MEAN_MARKER,
-            scale=0.62,
-            zorder=MEAN_ZORDER,
-            ax=ax,
-        )
-    else:
-        sns.boxplot(
-            data=sub,
-            y=dv,
-            color=SINGLE_GROUP_COLOR,
-            width=BOX_WIDTH,
-            fliersize=0,
-            linewidth=1.05,
-            boxprops=dict(alpha=0.5),
-            medianprops=dict(color=EDGE_COLOR, linewidth=1.25),
-            ax=ax,
-        )
-        mean = pd.to_numeric(sub[dv], errors="coerce").mean()
-        ax.scatter([0], [mean], marker=MEAN_MARKER, s=MEAN_MARKER_SIZE, color=EDGE_COLOR, zorder=MEAN_ZORDER)
-
-
-def _plot_jitter(ax, sub: pd.DataFrame, dv: str, xcol: str | None, hue: str | None, palette) -> None:
-    x_arg, x_order, hue_arg, hue_order = _resolve_plot_groups(sub, xcol, hue)
-    _assert_hue_geometry(hue_order)
-    if x_arg:
-        sns.stripplot(
-            data=sub,
-            x=x_arg,
-            y=dv,
-            hue=hue_arg,
-            order=x_order,
-            hue_order=hue_order,
-            palette=palette,
-            dodge=bool(hue_arg),
-            jitter=0.11,
-            size=JITTER_POINT_SIZE,
-            alpha=JITTER_ALPHA,
-            linewidth=0,
-            ax=ax,
-        )
-        sns.pointplot(
-            data=sub,
-            x=x_arg,
-            y=dv,
-            hue=hue_arg,
-            order=x_order,
-            hue_order=hue_order,
-            palette=palette,
-            dodge=POINT_DODGE if hue_arg else False,
-            join=False,
-            markers=MEAN_MARKER,
-            scale=0.62,
-            zorder=MEAN_ZORDER,
-            ax=ax,
-        )
-    else:
-        sns.stripplot(data=sub, y=dv, color=SINGLE_GROUP_COLOR, jitter=0.08, size=JITTER_POINT_SIZE, alpha=JITTER_ALPHA, linewidth=0, ax=ax)
-        mean = pd.to_numeric(sub[dv], errors="coerce").mean()
-        ax.scatter([0], [mean], marker=MEAN_MARKER, s=MEAN_MARKER_SIZE, color=EDGE_COLOR, zorder=MEAN_ZORDER)
-
-
-def _plot_box_mean_ci(ax, sub: pd.DataFrame, dv: str, xcol: str | None, hue: str | None, palette) -> None:
-    x_arg, x_order, hue_arg, hue_order = _resolve_plot_groups(sub, xcol, hue)
-    _assert_hue_geometry(hue_order)
-    if x_arg:
-        sns.boxplot(
-            data=sub,
-            x=x_arg,
-            y=dv,
-            hue=hue_arg,
-            order=x_order,
-            hue_order=hue_order,
-            palette=palette,
-            width=BOX_WIDTH,
-            fliersize=0,
-            linewidth=1.0,
-            dodge=bool(hue_arg),
-            boxprops=dict(alpha=0.34),
-            whiskerprops=dict(alpha=0.88),
-            medianprops=dict(color=EDGE_COLOR, linewidth=1.2),
-            ax=ax,
-        )
-        sns.pointplot(
-            data=sub,
-            x=x_arg,
-            y=dv,
-            hue=hue_arg,
-            order=x_order,
-            hue_order=hue_order,
-            palette=palette,
-            dodge=POINT_DODGE if hue_arg else False,
-            ci=95,
-            markers=MEAN_MARKER,
-            scale=0.62,
-            zorder=MEAN_ZORDER,
-            ax=ax,
-        )
-    else:
-        sns.boxplot(
-            data=sub,
-            y=dv,
-            color=SINGLE_GROUP_COLOR,
-            width=BOX_WIDTH,
-            fliersize=0,
-            linewidth=1.0,
-            boxprops=dict(alpha=0.32),
-            ax=ax,
-        )
-        mean = pd.to_numeric(sub[dv], errors="coerce").mean()
-        low, high = _ci95(sub[dv])
-        ax.errorbar([0], [mean], yerr=[[mean - low], [high - mean]], fmt=MEAN_MARKER, color=EDGE_COLOR, capsize=4, lw=1.0, zorder=MEAN_ZORDER)
-
-
-def _plot_violin(ax, sub: pd.DataFrame, dv: str, xcol: str | None, hue: str | None, palette) -> None:
-    x_arg, x_order, hue_arg, hue_order = _resolve_plot_groups(sub, xcol, hue)
-    _assert_hue_geometry(hue_order)
-    if x_arg:
-        sns.violinplot(
-            data=sub,
-            x=x_arg,
-            y=dv,
-            hue=hue_arg,
-            order=x_order,
-            hue_order=hue_order,
-            palette=palette,
-            inner=None,
-            cut=0,
-            linewidth=0.85,
-            saturation=0.58,
-            dodge=bool(hue_arg),
-            ax=ax,
-        )
-        sns.boxplot(
-            data=sub,
-            x=x_arg,
-            y=dv,
-            hue=hue_arg,
-            order=x_order,
-            hue_order=hue_order,
-            palette=palette,
-            width=BOX_WIDTH * 0.6,
-            fliersize=0,
-            linewidth=0.95,
-            dodge=bool(hue_arg),
-            boxprops=dict(alpha=0.5),
-            whiskerprops=dict(alpha=0.9),
-            medianprops=dict(color=EDGE_COLOR, linewidth=1.15),
-            ax=ax,
-        )
-        sns.pointplot(
-            data=sub,
-            x=x_arg,
-            y=dv,
-            hue=hue_arg,
-            order=x_order,
-            hue_order=hue_order,
-            palette=palette,
-            dodge=POINT_DODGE if hue_arg else False,
-            ci=95,
-            markers=MEAN_MARKER,
-            scale=0.62,
-            zorder=MEAN_ZORDER,
-            ax=ax,
-        )
-    else:
-        sns.violinplot(data=sub, y=dv, color=SINGLE_GROUP_COLOR, inner=None, cut=0, linewidth=0.9, saturation=0.72, ax=ax)
-        sns.boxplot(data=sub, y=dv, color=SINGLE_GROUP_COLOR, width=BOX_WIDTH * 0.55, fliersize=0, linewidth=0.95, boxprops=dict(alpha=0.55), ax=ax)
-        mean = pd.to_numeric(sub[dv], errors="coerce").mean()
-        low, high = _ci95(sub[dv])
-        ax.errorbar([0], [mean], yerr=[[mean - low], [high - mean]], fmt=MEAN_MARKER, color=EDGE_COLOR, capsize=4, lw=1.0, zorder=MEAN_ZORDER)
-
-
-def _dedupe_legend(ax) -> None:
+def _dedupe_legend(ax, title: str | None = None) -> None:
     handles, labels = ax.get_legend_handles_labels()
     if not handles:
         return
     seen = set()
     new_handles = []
     new_labels = []
-    for h, l in zip(handles, labels):
-        if l in seen or l == "":
+    for handle, label in zip(handles, labels):
+        if not label or label in seen:
             continue
-        seen.add(l)
-        new_handles.append(h)
-        new_labels.append(l)
+        seen.add(label)
+        new_handles.append(handle)
+        new_labels.append(label)
     if new_handles:
-        ax.legend(new_handles, new_labels, loc="upper left", bbox_to_anchor=(0.0, 1.02), ncol=min(3, len(new_labels)))
+        ax.legend(
+            new_handles,
+            new_labels,
+            loc="upper left",
+            bbox_to_anchor=(0.0, 1.02),
+            ncol=min(3, len(new_labels)),
+            title=title,
+            frameon=False,
+            borderaxespad=0,
+        )
+
+
+def _set_likert_axis(ax, dv: str) -> None:
+    dv_upper = dv.upper()
+    if dv_upper.startswith("S") or dv_upper.startswith("B") or dv_upper.startswith("IPQ"):
+        ax.set_ylim(*LIKERT_LIMS)
+        ax.set_yticks(LIKERT_TICKS)
+
+
+def _finalize_axis(ax, dv: str, xcol: str | None, hue: str | None, title: str) -> None:
+    ax.set_title(title, pad=10)
+    ax.set_xlabel(xcol if xcol else "")
+    ax.set_ylabel(dv)
+    ax.tick_params(axis="x", rotation=0)
+    _set_likert_axis(ax, dv)
+    soften_axes(ax)
+    if hue and hue in [t.get_text() for t in ax.get_legend().texts] if ax.get_legend() else []:
+        pass
+
+
+def _plot_main_variant(ax, sub: pd.DataFrame, dv: str, xcol: str | None, hue: str | None) -> None:
+    x_arg, x_order, hue_arg, hue_order = _resolve_plot_groups(sub, xcol, hue)
+    hue_levels = hue_order or []
+    palette = _get_palette_for_levels(hue_levels)
+
+    if x_arg:
+        box_palette = palette if hue_arg else SINGLE_GROUP_FILL
+        sns.boxplot(
+            data=sub,
+            x=x_arg,
+            y=dv,
+            hue=hue_arg,
+            order=x_order,
+            hue_order=hue_order,
+            palette=box_palette,
+            width=0.62,
+            dodge=bool(hue_arg),
+            fliersize=0,
+            linewidth=0.95,
+            saturation=1.0,
+            boxprops=dict(alpha=0.42),
+            whiskerprops=dict(color=PALETTE["muted"], linewidth=0.9),
+            capprops=dict(color=PALETTE["muted"], linewidth=0.9),
+            medianprops=dict(color=PALETTE["ink"], linewidth=1.15),
+            ax=ax,
+        )
+        if hue_arg:
+            sns.stripplot(
+                data=sub,
+                x=x_arg,
+                y=dv,
+                hue=hue_arg,
+                order=x_order,
+                hue_order=hue_order,
+                palette=palette,
+                dodge=True,
+                jitter=0.10,
+                size=2.7,
+                alpha=0.25,
+                edgecolor="white",
+                linewidth=0.28,
+                ax=ax,
+            )
+        else:
+            sns.stripplot(
+                data=sub,
+                x=x_arg,
+                y=dv,
+                color=STRIP_FALLBACK,
+                jitter=0.10,
+                size=2.7,
+                alpha=0.22,
+                edgecolor="white",
+                linewidth=0.28,
+                ax=ax,
+            )
+    else:
+        sns.boxplot(
+            data=sub,
+            y=dv,
+            color=SINGLE_GROUP_FILL,
+            width=0.55,
+            fliersize=0,
+            linewidth=0.95,
+            boxprops=dict(alpha=0.48),
+            whiskerprops=dict(color=PALETTE["muted"], linewidth=0.9),
+            capprops=dict(color=PALETTE["muted"], linewidth=0.9),
+            medianprops=dict(color=PALETTE["ink"], linewidth=1.15),
+            ax=ax,
+        )
+        sns.stripplot(
+            data=sub,
+            y=dv,
+            color=STRIP_FALLBACK,
+            jitter=0.08,
+            size=2.7,
+            alpha=0.22,
+            edgecolor="white",
+            linewidth=0.28,
+            ax=ax,
+        )
+
+    summaries = _group_summary_rows(sub, dv, xcol, hue)
+    for row in summaries:
+        mean = row["mean"]
+        low = row["ci_low"]
+        high = row["ci_high"]
+        if pd.notna(low) and pd.notna(high):
+            ax.errorbar(
+                [row["x"]],
+                [mean],
+                yerr=[[mean - low], [high - mean]],
+                fmt="D",
+                color=row["color"],
+                markersize=5.2,
+                capsize=4,
+                lw=1.1,
+                zorder=7,
+            )
+        else:
+            ax.scatter([row["x"]], [mean], marker="D", s=26, color=row["color"], zorder=7)
+    _annotate_group_summaries(ax, summaries, dv)
+    _dedupe_legend(ax, title=hue_arg)
+
+
+def _plot_box_variant(ax, sub: pd.DataFrame, dv: str, xcol: str | None, hue: str | None) -> None:
+    x_arg, x_order, hue_arg, hue_order = _resolve_plot_groups(sub, xcol, hue)
+    palette = _get_palette_for_levels(hue_order or [])
+
+    if x_arg:
+        sns.boxplot(
+            data=sub,
+            x=x_arg,
+            y=dv,
+            hue=hue_arg,
+            order=x_order,
+            hue_order=hue_order,
+            palette=palette if hue_arg else SINGLE_GROUP_FILL,
+            width=0.62,
+            dodge=bool(hue_arg),
+            fliersize=0,
+            linewidth=0.98,
+            saturation=1.0,
+            boxprops=dict(alpha=0.55),
+            whiskerprops=dict(color=PALETTE["muted"], linewidth=0.92),
+            capprops=dict(color=PALETTE["muted"], linewidth=0.92),
+            medianprops=dict(color=PALETTE["ink"], linewidth=1.2),
+            ax=ax,
+        )
+    else:
+        sns.boxplot(
+            data=sub,
+            y=dv,
+            color=SINGLE_GROUP_FILL,
+            width=0.55,
+            fliersize=0,
+            linewidth=0.98,
+            boxprops=dict(alpha=0.60),
+            whiskerprops=dict(color=PALETTE["muted"], linewidth=0.92),
+            capprops=dict(color=PALETTE["muted"], linewidth=0.92),
+            medianprops=dict(color=PALETTE["ink"], linewidth=1.2),
+            ax=ax,
+        )
+    _dedupe_legend(ax, title=hue_arg)
+
+
+def _publication_title(dv: str, xcol: str | None, hue: str | None) -> str:
+    if xcol and hue and xcol != hue:
+        return f"{dv} by {xcol} and {hue}"
+    if xcol:
+        return f"{dv} across {xcol}"
+    if hue:
+        return f"{dv} by {hue}"
+    return f"{dv} distribution"
 
 
 def _plot_distribution_panels(df: pd.DataFrame, cols: list[str], out_dir: Path, prefix: str, hue: str | None = None, xcol: str | None = None) -> list[str]:
-    made = []
+    made: list[str] = []
     use_cols = [c for c in cols if c in df.columns]
     if not use_cols:
         return made
@@ -562,30 +522,26 @@ def _plot_distribution_panels(df: pd.DataFrame, cols: list[str], out_dir: Path, 
         if hue and hue in sub.columns:
             sub[hue] = sub[hue].map(_normalize_category_value)
 
-        palette = _get_grouped_palette(sub, hue if hue in sub.columns and hue != xcol else xcol if xcol in sub.columns else None)
+        title = _publication_title(dv, xcol, hue if hue != xcol else None)
 
-        fig, ax = plt.subplots(figsize=(8.8, 4.9))
-        _plot_box_mean_ci(ax, sub, dv, xcol, hue, palette)
-        if xcol or hue:
-            _plot_jitter(ax, sub, dv, xcol, hue, palette)
-        _overlay_mean_ci_no_line(ax, sub, dv, xcol, hue, palette if isinstance(palette, dict) else {})
-        _finalize_axis(ax, dv, xcol, _publication_title(dv, xcol, hue if hue != xcol else None, ""))
-        _dedupe_legend(ax)
+        fig, ax = plt.subplots(figsize=(7.4, 4.5))
+        _plot_main_variant(ax, sub, dv, xcol, hue)
+        _finalize_axis(ax, dv, xcol, hue, title)
         fig.tight_layout()
         path = out_dir / f"{prefix}_{dv}_main.png"
-        fig.savefig(path, dpi=300, bbox_inches="tight")
+        fig.savefig(path, dpi=320, bbox_inches="tight")
         plt.close(fig)
         made.append(str(path))
 
-        fig2, ax2 = plt.subplots(figsize=(8.2, 4.8))
-        _plot_box(ax2, sub, dv, xcol, hue, palette)
-        _finalize_axis(ax2, dv, xcol, _publication_title(dv, xcol, hue if hue != xcol else None, ""))
-        _dedupe_legend(ax2)
+        fig2, ax2 = plt.subplots(figsize=(7.0, 4.3))
+        _plot_box_variant(ax2, sub, dv, xcol, hue)
+        _finalize_axis(ax2, dv, xcol, hue, title)
         fig2.tight_layout()
         path2 = out_dir / f"{prefix}_{dv}_box.png"
-        fig2.savefig(path2, dpi=300, bbox_inches="tight")
+        fig2.savefig(path2, dpi=320, bbox_inches="tight")
         plt.close(fig2)
         made.append(str(path2))
+
     return made
 
 
@@ -596,7 +552,7 @@ def main():
     ap.add_argument("--with-qc", action="store_true", help="Also export QC-excluded outputs")
     args = ap.parse_args()
 
-    apply_bae_style()
+    apply_publication_style()
 
     out = args.out_dir
     out.mkdir(parents=True, exist_ok=True)
@@ -699,7 +655,7 @@ def main():
         "outputs": outputs,
         "stats": ["n", "mean", "sd", "median", "min", "max", "skewness", "kurtosis", "ci95", "shapiro_p"],
         "stratification": ["WWR", "Complexity", "ExperienceGroup"],
-        "figure_style": "Building and Environment / Origin-inspired publication style; low-saturation blue-orange palette; narrow non-overlapping boxplots; light jitter overlay; right-side statistical summary box with n/M/SD.",
+        "figure_style": "Eyetrack-inspired publication style; vivid blue/orange palette; clean axes; in-plot statistical annotations; *_main.png uses box + light strip + mean/CI and *_box.png is box-only.",
     }
     (out / "descriptive_summary.json").write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     print(json.dumps(payload, ensure_ascii=False))
