@@ -169,24 +169,6 @@ def _finalize_axis(ax, dv: str, xcol: str | None, title: str) -> None:
     _set_likert_axis(ax, dv)
 
 
-def _summary_box(ax, title: str, lines: list[str]) -> None:
-    ax.axis("off")
-    ax.set_facecolor("#FAFBFC")
-    ax.text(0.04, 0.97, title, va="top", ha="left", fontsize=10.1, fontweight="bold", color="#33414B")
-    ax.text(
-        0.04,
-        0.91,
-        "\n".join(lines),
-        transform=ax.transAxes,
-        va="top",
-        ha="left",
-        fontsize=8.35,
-        color="#4B5A66",
-        linespacing=1.42,
-        bbox=dict(boxstyle="round,pad=0.42", fc="white", ec="#D7E0E8", lw=0.8, alpha=0.98),
-    )
-
-
 def _cluster_annotation_map(
     sub: pd.DataFrame,
     dv: str,
