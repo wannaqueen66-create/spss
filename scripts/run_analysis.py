@@ -410,26 +410,18 @@ def _plot_fixed_effects(fixed_df: pd.DataFrame, out_dir: Path) -> str | None:
     if x.empty:
         return None
     x = x.sort_values("Coef")
-    fig = plt.figure(figsize=(9.8, max(4.8, 0.34 * len(x) + 1.2)))
-    gs = fig.add_gridspec(1, 2, width_ratios=[1.95, 0.95], wspace=0.10)
-    ax = fig.add_subplot(gs[0, 0])
-    ax_info = fig.add_subplot(gs[0, 1])
-    ax.axvline(0, color="#8B929A", lw=0.9)
-    ax.errorbar(x["Coef"], np.arange(len(x)), xerr=[x["Coef"] - x["CI95_low"], x["CI95_high"] - x["Coef"]], fmt='o', color="#6FA8DC", ecolor="#BFD7EA", capsize=2.2)
-    ax.set_yticks(np.arange(len(x)))
+    fig, ax = plt.subplots(figsize=(8.4, max(4.8, 0.34 * len(x) + 1.2)))
+    ypos = np.arange(len(x))
+    ax.axvline(0, color=PLOT["gray"], lw=0.9)
+    ax.errorbar(x["Coef"], ypos, xerr=[x["Coef"] - x["CI95_low"], x["CI95_high"] - x["Coef"]], fmt='o', color=PLOT["blue"], ecolor=PLOT["light_blue"], capsize=2.2)
+    ax.set_yticks(ypos)
     ax.set_yticklabels([_humanize_term(t) for t in x["Term"]], fontsize=8)
     ax.set_title("Fixed effects with 95% CI", pad=8)
     ax.set_xlabel("Coefficient")
-    ax.grid(axis="x", alpha=0.18)
-    ax.grid(axis="y", visible=False)
-    sig_n = int((pd.to_numeric(x["p"], errors="coerce") < 0.05).sum()) if "p" in x.columns else 0
-    info_lines = [
-        f"Terms shown: {len(x)}",
-        f"p < .05 terms: {sig_n}",
-        f"Most positive β: {_fmt(x['Coef'].max())}",
-        f"Most negative β: {_fmt(x['Coef'].min())}",
-    ]
-    _summary_box(ax_info, "Coefficient summary", info_lines)
+    _soften_axes(ax, grid_axis="x")
+    for _, r in x.iterrows():
+        y = np.where(x.index == r.name)[0][0]
+        ax.text(float(r['CI95_high']) + 0.03, y, f"β={_fmt(r['Coef'],2)}, p={_fmt(r['p'],3)}", va='center', ha='left', fontsize=7.1, color=PLOT['muted'])
     out_dir.mkdir(parents=True, exist_ok=True)
     p = out_dir / "fixed_effects_forest.png"
     fig.savefig(p, dpi=300)
@@ -553,20 +545,15 @@ def _plot_effect_size_summary(effect_df: pd.DataFrame, out_dir: Path) -> str | N
     if x.empty:
         return None
     x = x.sort_values("partial_eta2")
-    fig = plt.figure(figsize=(8.8, max(4.2, 0.34 * len(x) + 1.0)))
-    gs = fig.add_gridspec(1, 2, width_ratios=[1.75, 1.0], wspace=0.12)
-    ax = fig.add_subplot(gs[0, 0])
-    ax_info = fig.add_subplot(gs[0, 1])
-    ax.barh(np.arange(len(x)), x["partial_eta2"], color="#6FA8DC", alpha=0.92)
-    ax.set_yticks(np.arange(len(x)))
+    fig, ax = plt.subplots(figsize=(7.8, max(4.2, 0.34 * len(x) + 1.0)))
+    ypos = np.arange(len(x))
+    ax.barh(ypos, x["partial_eta2"], color=PLOT["orange"], alpha=0.92)
+    ax.set_yticks(ypos)
     ax.set_yticklabels(x["Factor"], fontsize=8.2)
     ax.set_xlabel("Partial η²")
     ax.set_title("Effect size summary (partial η²)", pad=8)
-    ax.grid(axis="x", alpha=0.18)
-    ax.grid(axis="y", visible=False)
-    top = x.sort_values("partial_eta2", ascending=False).head(4)
-    info_lines = [f"Top partial η²:"] + [f"{r['Factor']}: {_fmt(r['partial_eta2'])}" for _, r in top.iterrows()]
-    _summary_box(ax_info, "Effect-size highlights", info_lines)
+    _soften_axes(ax, grid_axis="x")
+    _annotate_barh_values(ax, x["partial_eta2"], ypos, fmt="{:.3f}")
     out_dir.mkdir(parents=True, exist_ok=True)
     p = out_dir / "effect_size_summary.png"
     fig.savefig(p, dpi=300)
