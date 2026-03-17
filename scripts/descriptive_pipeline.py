@@ -282,6 +282,47 @@ def _assert_hue_geometry(hue_order: list | None) -> None:
         assert center_gap > BOX_WIDTH, f"Geometry regression: center_gap={center_gap:.3f} must be > box_width={BOX_WIDTH:.3f}."
 
 
+def _group_stats_text(sub: pd.DataFrame, dv: str, group_cols: list[str]) -> list[tuple[tuple, str]]:
+    rows: list[tuple[tuple, str]] = []
+    for keys, sg in sub.groupby(group_cols, dropna=False):
+        if not isinstance(keys, tuple):
+            keys = (keys,)
+        st = _desc_stats(sg[dv], sg["SubjectID"] if "SubjectID" in sg.columns else None)
+        label = f"n={st['n']}, M={_fmt_num(st['mean'])}, SD={_fmt_num(st['sd'])}"
+        rows.append((tuple(str(k) for k in keys), label))
+    return rows
+
+
+def _overlay_mean_ci_no_line(ax, sub: pd.DataFrame, dv: str, xcol: str | None, hue: str | None, palette: dict) -> None:
+    x_arg, x_order, hue_arg, hue_order = _resolve_plot_groups(sub, xcol, hue)
+    if not x_arg:
+        return
+    stats = _group_stats_text(sub, dv, [c for c in [x_arg, hue_arg] if c])
+    hue_levels = hue_order if hue_arg else [None]
+    offsets = np.linspace(-POINT_DODGE / 2, POINT_DODGE / 2, len(hue_levels)) if hue_arg else [0.0]
+    for i, xv in enumerate(x_order):
+        for j, hv in enumerate(hue_levels):
+            xpos = float(i) + float(offsets[j])
+            if hue_arg:
+                sg = sub[(sub[x_arg].astype(str) == str(xv)) & (sub[hue_arg].astype(str) == str(hv))]
+                key = (str(xv), str(hv))
+                color = palette.get(str(hv), EDGE_COLOR)
+            else:
+                sg = sub[sub[x_arg].astype(str) == str(xv)]
+                key = (str(xv),)
+                color = EDGE_COLOR
+            vals = pd.to_numeric(sg[dv], errors="coerce").dropna()
+            if vals.empty:
+                continue
+            mean = float(vals.mean())
+            low, high = _ci95(vals)
+            ax.errorbar([xpos], [mean], yerr=[[mean - low], [high - mean]], fmt=MEAN_MARKER, color=color, capsize=4, lw=1.0, zorder=MEAN_ZORDER)
+            stat_text = next((txt for keys, txt in stats if keys == key), None)
+            if stat_text:
+                y_anchor = high if pd.notna(high) else mean
+                ax.annotate(stat_text, xy=(xpos, y_anchor), xytext=(0, 8), textcoords="offset points", ha="center", va="bottom", fontsize=6.8, color="#4B5A66", bbox=dict(boxstyle="round,pad=0.18", fc="white", ec="none", alpha=0.90), zorder=6)
+
+
 def _plot_box(ax, sub: pd.DataFrame, dv: str, xcol: str | None, hue: str | None, palette) -> None:
     x_arg, x_order, hue_arg, hue_order = _resolve_plot_groups(sub, xcol, hue)
     _assert_hue_geometry(hue_order)
