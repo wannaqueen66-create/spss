@@ -509,23 +509,16 @@ def _plot_simple_effects(simple_df: pd.DataFrame, out_dir: Path) -> str | None:
     if simple_df.empty:
         return None
     x = simple_df.copy().sort_values("WWR")
-    fig = plt.figure(figsize=(8.6, 4.4))
-    gs = fig.add_gridspec(1, 2, width_ratios=[1.65, 0.95], wspace=0.12)
-    ax = fig.add_subplot(gs[0, 0])
-    ax_info = fig.add_subplot(gs[0, 1])
-    bars = ax.bar(x["WWR"].astype(str), x["Diff_C1_minus_C0"], color="#6FA8DC", alpha=0.88)
-    ax.axhline(0, color="#8B929A", lw=0.9)
+    fig, ax = plt.subplots(figsize=(7.8, 4.4))
+    bars = ax.bar(x["WWR"].astype(str), x["Diff_C1_minus_C0"], color=PLOT["blue"], alpha=0.90)
+    ax.axhline(0, color=PLOT["gray"], lw=0.9)
     ax.set_title("Simple effects: C1 - C0 within each WWR", pad=8)
     ax.set_xlabel("WWR")
     ax.set_ylabel("Mean difference")
-    ax.grid(axis="y", alpha=0.18)
-    ax.grid(axis="x", visible=False)
-    sig_rows = x[pd.to_numeric(x["p"], errors="coerce") < 0.05].copy()
-    info_lines = [
-        f"Rows: {len(x)}",
-        f"Significant: {len(sig_rows)}",
-    ] + [f"WWR {r['WWR']}: Δ={_fmt(r['Diff_C1_minus_C0'])}, p={_fmt(r['p'],4)}" for _, r in sig_rows.head(4).iterrows()]
-    _summary_box(ax_info, "Simple-effect summary", info_lines)
+    _soften_axes(ax, grid_axis="y")
+    for rect, (_, r) in zip(bars, x.iterrows()):
+        y = float(rect.get_height())
+        ax.text(rect.get_x() + rect.get_width()/2, y + (0.03 if y >= 0 else -0.03), f"Δ={_fmt(r['Diff_C1_minus_C0'],2)}\np={_fmt(r['p'],3)}", ha='center', va='bottom' if y >= 0 else 'top', fontsize=7.0, color=PLOT['ink'])
     out_dir.mkdir(parents=True, exist_ok=True)
     p = out_dir / "simple_effects_complexity_by_wwr.png"
     fig.savefig(p, dpi=300)
@@ -652,22 +645,13 @@ def main():
     for d in [csv_dir, png_dir, md_dir, txt_dir, json_dir]:
         d.mkdir(parents=True, exist_ok=True)
 
-    fig = plt.figure(figsize=(8.8, 4.6))
-    gs = fig.add_gridspec(1, 2, width_ratios=[1.7, 1.0], wspace=0.12)
-    ax = fig.add_subplot(gs[0, 0])
-    ax_info = fig.add_subplot(gs[0, 1])
+    fig, ax = plt.subplots(figsize=(7.8, 4.6))
     pdat = model_df.copy()
     pdat["Complexity"] = pdat["Complexity"].replace({"0": "C0", "1": "C1"})
-    sns.pointplot(data=pdat, x="WWR", y=dv_col, hue="Complexity", errorbar="se", dodge=True, palette=["#6FA8DC", "#F4A261"], ax=ax)
+    sns.pointplot(data=pdat, x="WWR", y=dv_col, hue="Complexity", errorbar="se", dodge=True, palette=[PLOT["blue"], PLOT["orange"]], ax=ax)
     ax.set_title(f"WWR × Complexity on {dv_col}")
-    ax.grid(axis="y", alpha=0.18)
-    ax.grid(axis="x", visible=False)
-    _summary_box(ax_info, "Condition summary", [
-        f"DV: {dv_col}",
-        f"Subjects: {model_df['SubjectID'].nunique()}",
-        f"Rows: {len(model_df)}",
-        f"Alpha(S1-S4): {_fmt(alpha)}" if not np.isnan(alpha) else "Alpha(S1-S4): NA",
-    ])
+    _soften_axes(ax, grid_axis="y")
+    ax.text(0.98, 0.03, f"Subjects={model_df['SubjectID'].nunique()}\nRows={len(model_df)}\nAlpha={_fmt(alpha) if not np.isnan(alpha) else 'NA'}", transform=ax.transAxes, ha="right", va="bottom", fontsize=7.4, color=PLOT["muted"], bbox=dict(boxstyle="round,pad=0.22", fc="white", ec="none", alpha=0.9))
     fig.savefig(png_dir / "wwr_complexity_afford4.png", dpi=220)
     plt.close(fig)
 
