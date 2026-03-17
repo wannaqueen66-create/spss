@@ -21,16 +21,16 @@ warnings.filterwarnings("ignore")
 from plot_style import apply_bae_style
 
 PLOT = {
-    "blue": "#6F97BD",
-    "orange": "#E3A86F",
-    "green": "#8FB7A1",
-    "purple": "#A99AC6",
+    "blue": "#2F6DA3",
+    "orange": "#E6862A",
+    "green": "#2A9D8F",
+    "purple": "#8E7DBE",
     "gray": "#A8B2BC",
     "ink": "#243447",
     "grid": "#E5ECF2",
     "muted": "#6B7C8F",
-    "light_blue": "#E8F1F8",
-    "light_orange": "#FAEBDD",
+    "light_blue": "#DCECF8",
+    "light_orange": "#FCE6D1",
 }
 
 

@@ -42,6 +42,7 @@ def _write_index(out: Path, branches: list[str]) -> None:
         lines.append(f"1. `./{branch}/overall/core_model/md/results_draft_zh.md` — Afford4 core-model narrative")
         lines.append(f"2. `./{branch}/overall/core_model/png/effect_size_summary.png` — Afford4 effect-size quick read")
         lines.append(f"3. `./{branch}/item_level_lmm/md/item_level_lmm_report_zh.md` — S1–S5 / B1–B3 / IPQ 逐题/逐维度统一结构 LMM 汇总")
+        lines.append(f"3b. `./{branch}/item_level_lmm/png/item_level_type3_heatmap_all.png` — all-item significance heatmap for PPT/reporting")
         lines.append(f"4. `./{branch}/overall/wwr_polynomial/wwr_polynomial_contrasts.csv` — overall WWR linear/quadratic significance")
         lines.append(f"4. `./{branch}/experience/wwr_polynomial_group_only/wwr_polynomial_contrasts.csv` — experience-group significance")
         lines.append(f"5. `./{branch}/experience/wwr_polynomial_group_round/csv/wwr_polynomial_contrasts.csv` — experience × round follow-up")
@@ -67,7 +68,7 @@ def _write_research_map(out: Path, branches: list[str]) -> None:
     lines.append("")
     lines.append("## Q4. What do item-level significance results say for S1–S5 / B1–B3 / IPQ1–IPQ6?")
     for branch in branches:
-        lines.append(f"- {branch}: `./{branch}/item_level_lmm/md/item_level_lmm_report_zh.md` + `./{branch}/item_level_lmm/csv/item_level_lmm_type3_fixed_effects.csv` + `./{branch}/item_level_lmm/csv/item_level_lmm_type3_fixed_effects_fdr.csv` + `./{branch}/item_level_lmm/csv/item_level_lmm_fixed_effect_estimates.csv` + `./{branch}/item_level_lmm/csv/item_level_lmm_emmeans.csv` + `./{branch}/item_level_lmm/csv/item_level_lmm_pairwise.csv`")
+        lines.append(f"- {branch}: `./{branch}/item_level_lmm/md/item_level_lmm_report_zh.md` + `./{branch}/item_level_lmm/csv/item_level_lmm_type3_fixed_effects.csv` + `./{branch}/item_level_lmm/csv/item_level_lmm_type3_fixed_effects_fdr.csv` + `./{branch}/item_level_lmm/csv/item_level_lmm_fixed_effect_estimates.csv` + `./{branch}/item_level_lmm/csv/item_level_lmm_emmeans.csv` + `./{branch}/item_level_lmm/csv/item_level_lmm_pairwise.csv` + `./{branch}/item_level_lmm/png/item_level_type3_heatmap_all.png` + `./{branch}/item_level_lmm/png/item_level_pairwise_sig_summary.png`")
     lines.append("")
     lines.append("## Q5. Do high/low experience groups differ in WWR significance patterns?")
     for branch in branches:
@@ -104,7 +105,7 @@ def _write_guide_png(out: Path, branches: list[str]) -> str:
         lines2 += [
             f"[{branch}] Q1/Q2 → overall / wwr_polynomial",
             f"[{branch}] Q3 → overall / core_model",
-            f"[{branch}] Q4 → item_level_lmm / md + csv / Type III + EMMs + pairwise",
+            f"[{branch}] Q4 → item_level_lmm / md + csv + png / Type III + EMMs + pairwise",
             f"[{branch}] Q5 → experience / wwr_polynomial_group_only",
             f"[{branch}] Q6 → experience / wwr_polynomial_group_round",
             "",

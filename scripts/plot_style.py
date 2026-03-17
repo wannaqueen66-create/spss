@@ -7,12 +7,12 @@ import matplotlib as mpl
 import seaborn as sns
 
 PUBLICATION_PALETTE = [
-    "#6E8FA8",  # low-saturation blue for primary low-level group
-    "#D89B72",  # low-saturation warm orange for primary high-level group
-    "#9FB8C9",  # pale support blue
-    "#E4C3A8",  # pale support sand
-    "#7E8F9E",  # muted slate support
-    "#B9C0C8",  # cool gray
+    "#2F6DA3",  # primary publication blue
+    "#E6862A",  # primary publication orange
+    "#78A9D4",  # support blue
+    "#F2B57D",  # support orange
+    "#2A9D8F",  # teal accent
+    "#8A94A6",  # neutral slate
 ]
 
 

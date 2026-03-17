@@ -197,14 +197,47 @@ def _fmt(v: float | None, nd: int = 3) -> str:
     return f"{float(v):.{nd}f}"
 
 
-def _summary_box(ax, title: str, lines: list[str]):
-    ax.axis("off")
-    ax.set_facecolor("#F7FAF8")
-    ax.text(0.03, 0.97, title, va="top", ha="left", fontsize=10.2, fontweight="bold", color="#40534C")
-    ax.text(
-        0.03, 0.90, "\n".join(lines), va="top", ha="left", fontsize=8.6, color="#50615A", linespacing=1.35,
-        bbox=dict(boxstyle="round,pad=0.45", fc="#F4F8F6", ec="#D5DFD9", lw=0.8)
-    )
+def _clean_label(value) -> str:
+    s = str(value)
+    if s.lower() == "nan":
+        return "NA"
+    mapping = {"0": "C0", "1": "C1", "low": "Low", "high": "High"}
+    return mapping.get(s, s)
+
+
+def _split_cell_label(row: pd.Series, cols: list[str]) -> str:
+    if not cols:
+        return "Overall"
+    parts = []
+    for c in cols:
+        cname = "Round" if c == "Repetition" else c
+        parts.append(f"{cname}={_clean_label(row[c])}")
+    return " | ".join(parts)
+
+
+def _style_axis(ax, grid_axis: str = "y"):
+    ax.spines["left"].set_color("#243447")
+    ax.spines["bottom"].set_color("#243447")
+    ax.spines["left"].set_linewidth(0.9)
+    ax.spines["bottom"].set_linewidth(0.9)
+    ax.tick_params(axis="both", colors="#243447", length=3)
+    ax.grid(axis=grid_axis, color="#E5ECF2", alpha=0.75, linewidth=0.7)
+    other = "x" if grid_axis == "y" else "y"
+    ax.grid(axis=other, visible=False)
+
+
+def _contrast_lines(rsub: pd.DataFrame, p_col: str) -> list[str]:
+    lines: list[str] = []
+    for contrast in ["Linear", "Quadratic"]:
+        rr = rsub[rsub["Contrast"] == contrast]
+        if rr.empty:
+            continue
+        rec = rr.iloc[0]
+        lines.append(
+            f"{contrast}: F={_fmt(rec.get('F'), 2)}, p={_fmt(rec.get(p_col), 3)}{_sigstar(rec.get(p_col))}, ηp²={_fmt(rec.get('partial_eta2'), 3)}"
+        )
+        lines.append(f"{rec.get('Direction', '')}; n={int(rec.get('n_subjects', 0) or 0)}")
+    return lines
 
 
 def _plot_trend_panels(means: pd.DataFrame, results_df: pd.DataFrame, out_dir: Path, split_cols: list[str], levels: list[float]) -> list[str]:
@@ -213,50 +246,91 @@ def _plot_trend_panels(means: pd.DataFrame, results_df: pd.DataFrame, out_dir: P
         return made
     out_dir.mkdir(parents=True, exist_ok=True)
 
+    p_col = "SigAdj." if "SigAdj." in results_df.columns and results_df["SigAdj."].notna().any() else "Sig."
+
     for dv in sorted(means["DV"].dropna().unique()):
         x = means[means["DV"] == dv].copy()
         if x.empty:
             continue
 
-        panel_col = split_cols[0] if split_cols else None
-        hue_col = split_cols[1] if len(split_cols) >= 2 else None
-        if panel_col and panel_col in x.columns:
-            panel_values = list(pd.unique(x[panel_col]))
+        if split_cols:
+            split_cols_plot = split_cols[:]
+            split_frame = x[split_cols_plot].drop_duplicates().reset_index(drop=True)
         else:
-            panel_values = ["ALL"]
-            x["__panel__"] = "ALL"
-            panel_col = "__panel__"
+            split_cols_plot = ["__overall__"]
+            split_frame = pd.DataFrame({"__overall__": ["Overall"]})
+            x["__overall__"] = "Overall"
 
-        fig = plt.figure(figsize=(max(9.2, 4.2 * len(panel_values) + 2.2), 4.8))
-        main_gs = fig.add_gridspec(1, len(panel_values) + 1, width_ratios=[*([1.0] * len(panel_values)), 0.95], wspace=0.18)
-        axes = [fig.add_subplot(main_gs[0, i]) for i in range(len(panel_values))]
-        ax_info = fig.add_subplot(main_gs[0, len(panel_values)])
-        for ax, panel_val in zip(axes, panel_values):
-            sub = x[x[panel_col] == panel_val].copy()
+        n_panels = len(split_frame)
+        ncols = min(3, max(1, n_panels))
+        nrows = int(np.ceil(n_panels / ncols))
+        fig, axes = plt.subplots(nrows, ncols, figsize=(max(8.6, 4.3 * ncols), max(4.2, 3.7 * nrows)), squeeze=False)
+        axes_flat = axes.flatten()
+
+        line_group_cols = [c for c in split_cols_plot if c != "Repetition"]
+        hue_col = line_group_cols[0] if len(line_group_cols) == 1 and split_cols_plot != ["__overall__"] else None
+
+        for i, (_, split_row) in enumerate(split_frame.iterrows()):
+            ax = axes_flat[i]
+            sub = x.copy()
+            rsub = results_df[(results_df["DV"] == dv) & (results_df["Source"] == "WWR")].copy()
+            for c in split_cols_plot:
+                sub = sub[sub[c].astype(str) == str(split_row[c])]
+                if c in rsub.columns:
+                    rsub = rsub[rsub[c].astype(str) == str(split_row[c])]
+
+            if sub.empty:
+                ax.set_visible(False)
+                continue
+
+            sub = sub.sort_values(levels[0] if False else "WWR")
             if hue_col and hue_col in sub.columns:
-                for hv, hg in sub.groupby(hue_col, dropna=False):
+                palette = ["#2F6DA3", "#E6862A", "#2A9D8F", "#8E7DBE"]
+                for j, (hv, hg) in enumerate(sub.groupby(hue_col, dropna=False)):
                     hg = hg.sort_values("WWR")
-                    color = "#2F5D7E" if str(hv).lower().startswith("h") else "#D98C3F"
-                    ax.plot(hg["WWR"], hg["mean"], marker="o", label=str(hv), color=color, linewidth=1.8)
-                    ax.fill_between(hg["WWR"], hg["mean"] - hg["se"], hg["mean"] + hg["se"], alpha=0.14, color=color)
+                    color = palette[j % len(palette)]
+                    ax.plot(hg["WWR"], hg["mean"], marker="o", label=_clean_label(hv), color=color, linewidth=2.0)
+                    if hg["se"].notna().any():
+                        ax.fill_between(hg["WWR"], hg["mean"] - hg["se"], hg["mean"] + hg["se"], alpha=0.14, color=color)
+                    for _, rr in hg.iterrows():
+                        ax.text(rr["WWR"], rr["mean"], f"{_fmt(rr['mean'],2)}", fontsize=8.0, color=color, ha="center", va="bottom")
             else:
                 sub = sub.sort_values("WWR")
-                ax.plot(sub["WWR"], sub["mean"], marker="o", color="#2F5D7E", linewidth=1.8)
-                ax.fill_between(sub["WWR"], sub["mean"] - sub["se"], sub["mean"] + sub["se"], alpha=0.14, color="#9EB9CF")
-            ax.set_title(f"{panel_col} = {panel_val}" if panel_val != "ALL" else dv)
+                ax.plot(sub["WWR"], sub["mean"], marker="o", color="#2F6DA3", linewidth=2.1)
+                if sub["se"].notna().any():
+                    ax.fill_between(sub["WWR"], sub["mean"] - sub["se"], sub["mean"] + sub["se"], alpha=0.16, color="#2F6DA3")
+                for _, rr in sub.iterrows():
+                    ax.text(rr["WWR"], rr["mean"], f"{_fmt(rr['mean'],2)}", fontsize=8.0, color="#2F6DA3", ha="center", va="bottom")
+
+            title = _split_cell_label(split_row, [c for c in split_cols_plot if c != "__overall__"])
+            ax.set_title(title if title else dv, fontsize=10.2)
             ax.set_xlabel("WWR")
             ax.set_xticks(levels)
-            ax.grid(alpha=0.2)
+            ax.set_xticklabels([_level_label(v) for v in levels])
+            if i % ncols == 0:
+                ax.set_ylabel(dv)
+            else:
+                ax.set_ylabel("")
+            _style_axis(ax, grid_axis="y")
 
-            rsub = results_df[(results_df["DV"] == dv) & (results_df["Source"] == "WWR")].copy()
-            if panel_col != "__panel__" and panel_col in rsub.columns:
-                rsub = rsub[rsub[panel_col].astype(str) == str(panel_val)]
-        axes[0].set_ylabel(dv)
-        if hue_col and hue_col in x.columns:
-            handles, labels = axes[0].get_legend_handles_labels()
+            info_lines = _contrast_lines(rsub, p_col=p_col)
+            if info_lines:
+                ax.text(
+                    0.02, 0.98, "\n".join(info_lines),
+                    transform=ax.transAxes, ha="left", va="top", fontsize=7.6, color="#243447",
+                    bbox=dict(boxstyle="round,pad=0.25", fc="white", ec="#D6E2EC", lw=0.7, alpha=0.94)
+                )
+
+        for j in range(n_panels, len(axes_flat)):
+            axes_flat[j].set_visible(False)
+
+        if hue_col:
+            handles, labels = axes_flat[0].get_legend_handles_labels()
             if handles:
-                fig.legend(handles, labels, title=hue_col, loc="upper center", ncol=max(1, len(labels)))
+                fig.legend(handles, labels, title=("Experience" if hue_col == "ExperienceGroup" else hue_col), loc="upper center", ncol=max(1, len(labels)), frameon=False)
+                fig.subplots_adjust(top=0.84)
 
+        fig.suptitle(f"WWR trend profile — {dv}", y=0.98, fontsize=11.2, fontweight="bold")
         path = out_dir / f"task5_trend_profile_{dv}.png"
         fig.savefig(path, dpi=230)
         plt.close(fig)
