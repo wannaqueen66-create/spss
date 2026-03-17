@@ -355,7 +355,6 @@ def _plot_main_variant(ax, sub: pd.DataFrame, dv: str, xcol: str | None, hue: st
     palette = _get_palette_for_levels(hue_levels)
 
     if x_arg:
-        box_palette = palette if hue_arg else SINGLE_GROUP_FILL
         sns.boxplot(
             data=sub,
             x=x_arg,
@@ -363,7 +362,8 @@ def _plot_main_variant(ax, sub: pd.DataFrame, dv: str, xcol: str | None, hue: st
             hue=hue_arg,
             order=x_order,
             hue_order=hue_order,
-            palette=box_palette,
+            palette=palette if hue_arg else None,
+            color=None if hue_arg else SINGLE_GROUP_FILL,
             width=0.62,
             dodge=bool(hue_arg),
             fliersize=0,
@@ -466,7 +466,8 @@ def _plot_box_variant(ax, sub: pd.DataFrame, dv: str, xcol: str | None, hue: str
             hue=hue_arg,
             order=x_order,
             hue_order=hue_order,
-            palette=palette if hue_arg else SINGLE_GROUP_FILL,
+            palette=palette if hue_arg else None,
+            color=None if hue_arg else SINGLE_GROUP_FILL,
             width=0.62,
             dodge=bool(hue_arg),
             fliersize=0,
