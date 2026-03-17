@@ -522,23 +522,29 @@ def _plot_distribution_panels(df: pd.DataFrame, cols: list[str], out_dir: Path, 
             sub[hue] = sub[hue].map(_normalize_category_value)
 
         palette = _get_grouped_palette(sub, hue if hue in sub.columns and hue != xcol else xcol if xcol in sub.columns else None)
-        fig = plt.figure(figsize=(10.4, 4.9))
-        gs = fig.add_gridspec(1, 2, width_ratios=[3.6, 1.45], wspace=0.12)
-        ax = fig.add_subplot(gs[0, 0])
-        ax_info = fig.add_subplot(gs[0, 1])
 
+        fig, ax = plt.subplots(figsize=(8.8, 4.9))
         _plot_box_mean_ci(ax, sub, dv, xcol, hue, palette)
         if xcol or hue:
             _plot_jitter(ax, sub, dv, xcol, hue, palette)
-        _finalize_axis(ax, dv, xcol, _publication_title(dv, xcol, hue if hue != xcol else None, "box+mean±95% CI"))
+        _overlay_mean_ci_no_line(ax, sub, dv, xcol, hue, palette if isinstance(palette, dict) else {})
+        _finalize_axis(ax, dv, xcol, _publication_title(dv, xcol, hue if hue != xcol else None, ""))
         _dedupe_legend(ax)
-        summary_lines = _build_right_summary_lines(sub, dv, xcol, hue if hue in sub.columns and hue != xcol else None)
-        _summary_box(ax_info, f"{dv} summary", summary_lines)
         fig.tight_layout()
         path = out_dir / f"{prefix}_{dv}_main.png"
         fig.savefig(path, dpi=300, bbox_inches="tight")
         plt.close(fig)
         made.append(str(path))
+
+        fig2, ax2 = plt.subplots(figsize=(8.2, 4.8))
+        _plot_box(ax2, sub, dv, xcol, hue, palette)
+        _finalize_axis(ax2, dv, xcol, _publication_title(dv, xcol, hue if hue != xcol else None, ""))
+        _dedupe_legend(ax2)
+        fig2.tight_layout()
+        path2 = out_dir / f"{prefix}_{dv}_box.png"
+        fig2.savefig(path2, dpi=300, bbox_inches="tight")
+        plt.close(fig2)
+        made.append(str(path2))
     return made
 
 
