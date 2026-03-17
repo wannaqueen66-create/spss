@@ -551,7 +551,7 @@ def _plot_distribution_panels(df: pd.DataFrame, cols: list[str], out_dir: Path, 
         _finalize_axis(ax, dv, xcol, _publication_title(dv, xcol, hue if hue != xcol else None, "box+mean±95% CI"))
         _dedupe_legend(ax)
         summary_lines = _build_right_summary_lines(sub, dv, xcol, hue if hue in sub.columns and hue != xcol else None)
-        _summary_box(ax_info, f"{dv} statistics", summary_lines)
+        _summary_box(ax_info, f"{dv} summary", summary_lines)
         fig.tight_layout()
         path = out_dir / f"{prefix}_{dv}_main.png"
         fig.savefig(path, dpi=300, bbox_inches="tight")
