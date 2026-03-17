@@ -257,17 +257,6 @@ def _plot_trend_panels(means: pd.DataFrame, results_df: pd.DataFrame, out_dir: P
             if handles:
                 fig.legend(handles, labels, title=hue_col, loc="upper center", ncol=max(1, len(labels)))
 
-        rsub_all = results_df[(results_df["DV"] == dv) & (results_df["Source"] == "WWR")].copy()
-        sum_lines = []
-        for _, rr in rsub_all.sort_values("Contrast").head(6).iterrows():
-            p_use = rr["SigAdj"] if ("SigAdj" in rr.index and pd.notna(rr["SigAdj"])) else rr["Sig."]
-            sum_lines.append(f"{rr['Contrast']}: p={_fmt(p_use, 4)} | {rr.get('Direction', '')}")
-        if "n_subjects" in rsub_all.columns and not rsub_all.empty:
-            sum_lines.insert(0, f"n = {int(rsub_all['n_subjects'].max())}")
-        if not sum_lines:
-            sum_lines = ["No valid contrast rows."]
-        _summary_box(ax_info, f"Trend summary — {dv}", sum_lines)
-
         path = out_dir / f"task5_trend_profile_{dv}.png"
         fig.savefig(path, dpi=230)
         plt.close(fig)
