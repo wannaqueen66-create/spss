@@ -376,44 +376,54 @@ def _fmt(v, nd=3):
     return f"{float(v):.{nd}f}"
 
 
-def _summary_box(ax, title: str, lines: list[str]):
-    ax.axis("off")
-    ax.set_facecolor("#F7FAF8")
-    ax.text(0.03, 0.97, title, va="top", ha="left", fontsize=10.2, fontweight="bold", color="#40534C")
-    ax.text(
-        0.03, 0.90, "\n".join(lines), va="top", ha="left", fontsize=8.6, color="#50615A", linespacing=1.35,
-        bbox=dict(boxstyle="round,pad=0.45", fc="#F4F8F6", ec="#D5DFD9", lw=0.8)
-    )
+def _soften_axes(ax, grid_axis: str = "x"):
+    ax.spines["left"].set_color(PLOT["ink"])
+    ax.spines["bottom"].set_color(PLOT["ink"])
+    ax.spines["left"].set_linewidth(0.9)
+    ax.spines["bottom"].set_linewidth(0.9)
+    ax.tick_params(axis="both", colors=PLOT["ink"], length=3)
+    ax.grid(axis=grid_axis, color=PLOT["grid"], alpha=0.7, linewidth=0.7)
+    other = "x" if grid_axis == "y" else "y"
+    ax.grid(axis=other, visible=False)
+
+
+def _annotate_barh_values(ax, values, ys, fmt="{:.3f}", color=None):
+    color = color or PLOT["ink"]
+    vals = [float(v) for v in values if pd.notna(v)]
+    if not vals:
+        return
+    span = max(max(vals) - min(vals), 1.0)
+    for v, y in zip(values, ys):
+        if pd.isna(v):
+            continue
+        x = float(v)
+        dx = 0.02 * span if x >= 0 else -0.02 * span
+        ha = "left" if x >= 0 else "right"
+        ax.text(x + dx, y, fmt.format(x), va="center", ha=ha, fontsize=7.4, color=color)
 
 
 def _plot_model_comparison(cmp_df: pd.DataFrame, out_dir: Path) -> str | None:
     if cmp_df.empty:
         return None
     x = cmp_df.copy().sort_values("AIC", ascending=True)
-    fig = plt.figure(figsize=(8.8, 4.4))
-    gs = fig.add_gridspec(1, 2, width_ratios=[1.65, 0.95], wspace=0.12)
-    ax = fig.add_subplot(gs[0, 0])
-    ax_info = fig.add_subplot(gs[0, 1])
-    colors = ["#6FA8DC" if s == "ok" else "#E88C7D" for s in x.get("Status", pd.Series(["ok"] * len(x)))]
-    ax.barh(x["Model"], x["AIC"], color=colors, alpha=0.92)
+    fig, ax = plt.subplots(figsize=(7.8, 4.4))
+    ypos = np.arange(len(x))
+    colors = [PLOT["blue"] if s == "ok" else PLOT["orange"] for s in x.get("Status", pd.Series(["ok"] * len(x)))]
+    ax.barh(ypos, x["AIC"], color=colors, alpha=0.94)
+    ax.set_yticks(ypos)
+    ax.set_yticklabels(x["Model"])
     ax.set_title("Model comparison by AIC", pad=8)
     ax.set_xlabel("AIC")
     ax.set_ylabel("")
-    ax.grid(axis="x", alpha=0.18)
-    ax.grid(axis="y", visible=False)
+    _soften_axes(ax, grid_axis="x")
+    _annotate_barh_values(ax, x["AIC"], ypos, fmt="{:.2f}")
     best_row = x.iloc[0]
-    info_lines = [
-        f"Best model: {best_row['Model']}",
-        f"AIC = {_fmt(best_row['AIC'])}",
-        f"BIC = {_fmt(best_row.get('BIC'))}",
-        f"LogLik = {_fmt(best_row.get('LogLik'))}",
-    ]
-    _summary_box(ax_info, "Model fit summary", info_lines)
+    ax.text(0.98, 0.03, f"Best: {best_row['Model']}\nBIC={_fmt(best_row.get('BIC'),2)}\nLogLik={_fmt(best_row.get('LogLik'),2)}", transform=ax.transAxes, ha="right", va="bottom", fontsize=7.4, color=PLOT["muted"], bbox=dict(boxstyle="round,pad=0.22", fc="white", ec="none", alpha=0.9))
     out_dir.mkdir(parents=True, exist_ok=True)
-    p = out_dir / "model_comparison_aic.png"
-    fig.savefig(p, dpi=300)
+    p_out = out_dir / "model_comparison_aic.png"
+    fig.savefig(p_out, dpi=300)
     plt.close(fig)
-    return str(p)
+    return str(p_out)
 
 
 def _plot_fixed_effects(fixed_df: pd.DataFrame, out_dir: Path) -> str | None:
@@ -432,14 +442,13 @@ def _plot_fixed_effects(fixed_df: pd.DataFrame, out_dir: Path) -> str | None:
     ax.set_title("Fixed effects with 95% CI", pad=8)
     ax.set_xlabel("Coefficient")
     _soften_axes(ax, grid_axis="x")
-    for _, r in x.iterrows():
-        y = np.where(x.index == r.name)[0][0]
-        ax.text(float(r['CI95_high']) + 0.03, y, f"β={_fmt(r['Coef'],2)}, p={_fmt(r['p'],3)}", va='center', ha='left', fontsize=7.1, color=PLOT['muted'])
+    for idx, (_, r) in enumerate(x.iterrows()):
+        ax.text(float(r['CI95_high']) + 0.03, idx, f"β={_fmt(r['Coef'],2)}, p={_fmt(r['p'],3)}", va='center', ha='left', fontsize=7.1, color=PLOT['muted'])
     out_dir.mkdir(parents=True, exist_ok=True)
-    p = out_dir / "fixed_effects_forest.png"
-    fig.savefig(p, dpi=300)
+    p_out = out_dir / "fixed_effects_forest.png"
+    fig.savefig(p_out, dpi=300)
     plt.close(fig)
-    return str(p)
+    return str(p_out)
 
 
 def _plot_interactions(infer_df: pd.DataFrame, out_dir: Path) -> str | None:
@@ -448,26 +457,21 @@ def _plot_interactions(infer_df: pd.DataFrame, out_dir: Path) -> str | None:
     x = infer_df.copy()
     x["minuslog10p"] = -np.log10(pd.to_numeric(x["p"], errors="coerce"))
     x = x.sort_values("minuslog10p", ascending=True)
-    fig = plt.figure(figsize=(9.4, max(4.8, 0.34 * len(x) + 1.2)))
-    gs = fig.add_gridspec(1, 2, width_ratios=[1.85, 1.05], wspace=0.12)
-    ax = fig.add_subplot(gs[0, 0])
-    ax_info = fig.add_subplot(gs[0, 1])
-    palette = x["EffectType"].map({"Main Effect": "#6FA8DC", "Interaction (2-way)": "#F4A261", "Interaction (3-way)": "#7BC8A4"}).fillna("#C7CDD4")
-    ax.barh(np.arange(len(x)), x["minuslog10p"], color=list(palette), alpha=0.92)
-    ax.set_yticks(np.arange(len(x)))
+    fig, ax = plt.subplots(figsize=(8.6, max(4.8, 0.34 * len(x) + 1.2)))
+    ypos = np.arange(len(x))
+    palette = x["EffectType"].map({"Main Effect": PLOT["blue"], "Interaction (2-way)": PLOT["orange"], "Interaction (3-way)": PLOT["green"]}).fillna(PLOT["gray"])
+    ax.barh(ypos, x["minuslog10p"], color=list(palette), alpha=0.94)
+    ax.set_yticks(ypos)
     ax.set_yticklabels(x["APA_Term"], fontsize=8)
     ax.set_xlabel("-log10(p)")
     ax.set_title("Main and interaction effects", pad=8)
-    ax.grid(axis="x", alpha=0.18)
-    ax.grid(axis="y", visible=False)
-    top_rows = x.sort_values("minuslog10p", ascending=False).head(5)
-    info_lines = [f"Top effects:"] + [f"{r['APA_Term'][:30]} | p={_fmt(r['p'],4)}" for _, r in top_rows.iterrows()]
-    _summary_box(ax_info, "Effect highlights", info_lines)
+    _soften_axes(ax, grid_axis="x")
+    _annotate_barh_values(ax, x["minuslog10p"], ypos, fmt="{:.2f}")
     out_dir.mkdir(parents=True, exist_ok=True)
-    p = out_dir / "main_interactions_summary.png"
-    fig.savefig(p, dpi=300)
+    p_out = out_dir / "main_interactions_summary.png"
+    fig.savefig(p_out, dpi=300)
     plt.close(fig)
-    return str(p)
+    return str(p_out)
 
 
 def _plot_random_effects(rand_df: pd.DataFrame, out_dir: Path) -> str | None:
