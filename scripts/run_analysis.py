@@ -20,6 +20,19 @@ warnings.filterwarnings("ignore")
 
 from plot_style import apply_bae_style
 
+PLOT = {
+    "blue": "#6F97BD",
+    "orange": "#E3A86F",
+    "green": "#8FB7A1",
+    "purple": "#A99AC6",
+    "gray": "#A8B2BC",
+    "ink": "#243447",
+    "grid": "#E5ECF2",
+    "muted": "#6B7C8F",
+    "light_blue": "#E8F1F8",
+    "light_orange": "#FAEBDD",
+}
+
 
 def cronbach_alpha(df: pd.DataFrame) -> float:
     x = df.dropna()
