@@ -19,13 +19,16 @@ B_COLS = ["B1", "B2", "B3", "Bmean"]
 IPQ_COLS = ["IPQ1", "IPQ2", "IPQ3", "IPQ4", "IPQ5", "IPQ6", "IPQ_mean"]
 LIKERT_LIMS = (1, 10)
 LIKERT_TICKS = list(range(1, 11))
-BOX_WIDTH = 0.30
-POINT_DODGE = 0.32
-JITTER_POINT_SIZE = 2.0
-JITTER_ALPHA = 0.30
-MEAN_MARKER_SIZE = 18
+BOX_WIDTH = 0.22
+POINT_DODGE = 0.42
+JITTER_POINT_SIZE = 1.4
+JITTER_ALPHA = 0.16
+MEAN_MARKER_SIZE = 20
 MEAN_MARKER = "D"
-MEAN_ZORDER = 7
+MEAN_ZORDER = 8
+LOW_HIGH_PALETTE = ["#6E8FA8", "#D89B72"]
+SINGLE_GROUP_COLOR = "#9FB8C9"
+EDGE_COLOR = "#2F3B46"
 
 
 def _exclude_subjects(df: pd.DataFrame, text: str) -> pd.DataFrame:
@@ -168,19 +171,19 @@ def _finalize_axis(ax, dv: str, xcol: str | None, title: str) -> None:
 
 def _summary_box(ax, title: str, lines: list[str]) -> None:
     ax.axis("off")
-    ax.set_facecolor("#F7FAFD")
-    ax.text(0.04, 0.97, title, va="top", ha="left", fontsize=10.0, fontweight="bold", color="#40534C")
+    ax.set_facecolor("#FAFBFC")
+    ax.text(0.04, 0.97, title, va="top", ha="left", fontsize=10.1, fontweight="bold", color="#33414B")
     ax.text(
         0.04,
-        0.90,
+        0.91,
         "\n".join(lines),
         transform=ax.transAxes,
         va="top",
         ha="left",
-        fontsize=8.2,
-        color="#4E5E6A",
-        linespacing=1.35,
-        bbox=dict(boxstyle="round,pad=0.38", fc="white", ec="#D7E0E8", lw=0.75, alpha=0.96),
+        fontsize=8.35,
+        color="#4B5A66",
+        linespacing=1.42,
+        bbox=dict(boxstyle="round,pad=0.42", fc="white", ec="#D7E0E8", lw=0.8, alpha=0.98),
     )
 
 
@@ -230,65 +233,26 @@ def _sample_size_legend_lines(sub: pd.DataFrame, hue: str | None = None) -> list
     return [f"Total participants: n={n}"]
 
 
-def _annotate_cluster_stats(ax, sub: pd.DataFrame, dv: str, xcol: str | None, hue: str | None = None) -> None:
+def _build_right_summary_lines(sub: pd.DataFrame, dv: str, xcol: str | None, hue: str | None = None) -> list[str]:
     show_full_stats = True
     if xcol and xcol in sub.columns:
         show_full_stats = len(_get_order(sub[xcol])) <= 3
-
     lines_map = _cluster_annotation_map(sub, dv, xcol, hue, show_full_stats)
-    if not lines_map:
-        return
-
+    lines: list[str] = []
     if not xcol or xcol not in sub.columns:
-        text = "\n".join(lines_map.get("ALL", []))
-        ax.text(
-            0,
-            -0.16,
-            text,
-            transform=ax.get_xaxis_transform(),
-            ha="center",
-            va="center",
-            fontsize=7.4,
-            color="#4E5E6A",
-            clip_on=False,
-            zorder=6,
-        )
+        lines.extend(lines_map.get("ALL", []))
     else:
-        trans = ax.get_xaxis_transform()
-        base_y = -0.16
-        line_step = 0.08
         x_order = _get_order(sub[xcol])
-        for i, xv in enumerate(x_order):
-            lines = lines_map.get(str(xv), [])
-            if not lines:
+        for xv in x_order:
+            x_lines = lines_map.get(str(xv), [])
+            if not x_lines:
                 continue
-            for j, line in enumerate(lines):
-                ax.text(
-                    i,
-                    base_y - j * line_step,
-                    line,
-                    transform=trans,
-                    ha="center",
-                    va="center",
-                    fontsize=7.3,
-                    color="#4E5E6A",
-                    clip_on=False,
-                    zorder=6,
-                )
-
-    legend_lines = _sample_size_legend_lines(sub, hue)
-    ax.text(
-        0.985,
-        0.03,
-        "\n".join(legend_lines),
-        transform=ax.transAxes,
-        ha="right",
-        va="bottom",
-        fontsize=7.4,
-        color="#536471",
-        bbox=dict(boxstyle="round,pad=0.24", fc="white", ec="#D7E0E8", lw=0.7, alpha=0.94),
-        zorder=6,
-    )
+            lines.append(f"{_format_group_value(xv)}:")
+            lines.extend([f"  {line}" for line in x_lines])
+    if lines:
+        lines.append("")
+    lines.extend(_sample_size_legend_lines(sub, hue))
+    return lines
 
 
 def _normalize_category_value(v):
@@ -316,6 +280,8 @@ def _get_grouped_palette(sub: pd.DataFrame, hue: str | None) -> dict | None:
     if not hue or hue not in sub.columns:
         return None
     levels = _get_order(sub[hue])
+    if len(levels) == 2:
+        return {str(levels[0]): LOW_HIGH_PALETTE[0], str(levels[1]): LOW_HIGH_PALETTE[1]}
     colors = get_publication_palette(len(levels))
     return {str(level): colors[i] for i, level in enumerate(levels)}
 
@@ -354,7 +320,7 @@ def _plot_box(ax, sub: pd.DataFrame, dv: str, xcol: str | None, hue: str | None,
             boxprops=dict(alpha=0.42),
             whiskerprops=dict(alpha=0.9),
             capprops=dict(alpha=0.9),
-            medianprops=dict(color="#2F3B46", linewidth=1.25),
+            medianprops=dict(color=EDGE_COLOR, linewidth=1.25),
             ax=ax,
         )
         sns.pointplot(
@@ -376,16 +342,16 @@ def _plot_box(ax, sub: pd.DataFrame, dv: str, xcol: str | None, hue: str | None,
         sns.boxplot(
             data=sub,
             y=dv,
-            color="#D7E7F5",
+            color=SINGLE_GROUP_COLOR,
             width=BOX_WIDTH,
             fliersize=0,
             linewidth=1.05,
             boxprops=dict(alpha=0.5),
-            medianprops=dict(color="#2F3B46", linewidth=1.25),
+            medianprops=dict(color=EDGE_COLOR, linewidth=1.25),
             ax=ax,
         )
         mean = pd.to_numeric(sub[dv], errors="coerce").mean()
-        ax.scatter([0], [mean], marker=MEAN_MARKER, s=MEAN_MARKER_SIZE, color="#2F3B46", zorder=MEAN_ZORDER)
+        ax.scatter([0], [mean], marker=MEAN_MARKER, s=MEAN_MARKER_SIZE, color=EDGE_COLOR, zorder=MEAN_ZORDER)
 
 
 def _plot_jitter(ax, sub: pd.DataFrame, dv: str, xcol: str | None, hue: str | None, palette) -> None:
@@ -423,9 +389,9 @@ def _plot_jitter(ax, sub: pd.DataFrame, dv: str, xcol: str | None, hue: str | No
             ax=ax,
         )
     else:
-        sns.stripplot(data=sub, y=dv, color="#6FA8DC", jitter=0.08, size=JITTER_POINT_SIZE, alpha=JITTER_ALPHA, linewidth=0, ax=ax)
+        sns.stripplot(data=sub, y=dv, color=SINGLE_GROUP_COLOR, jitter=0.08, size=JITTER_POINT_SIZE, alpha=JITTER_ALPHA, linewidth=0, ax=ax)
         mean = pd.to_numeric(sub[dv], errors="coerce").mean()
-        ax.scatter([0], [mean], marker=MEAN_MARKER, s=MEAN_MARKER_SIZE, color="#2F3B46", zorder=MEAN_ZORDER)
+        ax.scatter([0], [mean], marker=MEAN_MARKER, s=MEAN_MARKER_SIZE, color=EDGE_COLOR, zorder=MEAN_ZORDER)
 
 
 def _plot_box_mean_ci(ax, sub: pd.DataFrame, dv: str, xcol: str | None, hue: str | None, palette) -> None:
@@ -446,7 +412,7 @@ def _plot_box_mean_ci(ax, sub: pd.DataFrame, dv: str, xcol: str | None, hue: str
             dodge=bool(hue_arg),
             boxprops=dict(alpha=0.34),
             whiskerprops=dict(alpha=0.88),
-            medianprops=dict(color="#2F3B46", linewidth=1.2),
+            medianprops=dict(color=EDGE_COLOR, linewidth=1.2),
             ax=ax,
         )
         sns.pointplot(
@@ -468,7 +434,7 @@ def _plot_box_mean_ci(ax, sub: pd.DataFrame, dv: str, xcol: str | None, hue: str
         sns.boxplot(
             data=sub,
             y=dv,
-            color="#C9D7E8",
+            color=SINGLE_GROUP_COLOR,
             width=BOX_WIDTH,
             fliersize=0,
             linewidth=1.0,
@@ -477,7 +443,7 @@ def _plot_box_mean_ci(ax, sub: pd.DataFrame, dv: str, xcol: str | None, hue: str
         )
         mean = pd.to_numeric(sub[dv], errors="coerce").mean()
         low, high = _ci95(sub[dv])
-        ax.errorbar([0], [mean], yerr=[[mean - low], [high - mean]], fmt=MEAN_MARKER, color="#2F3B46", capsize=4, lw=1.0, zorder=MEAN_ZORDER)
+        ax.errorbar([0], [mean], yerr=[[mean - low], [high - mean]], fmt=MEAN_MARKER, color=EDGE_COLOR, capsize=4, lw=1.0, zorder=MEAN_ZORDER)
 
 
 def _plot_violin(ax, sub: pd.DataFrame, dv: str, xcol: str | None, hue: str | None, palette) -> None:
@@ -513,7 +479,7 @@ def _plot_violin(ax, sub: pd.DataFrame, dv: str, xcol: str | None, hue: str | No
             dodge=bool(hue_arg),
             boxprops=dict(alpha=0.5),
             whiskerprops=dict(alpha=0.9),
-            medianprops=dict(color="#2F3B46", linewidth=1.15),
+            medianprops=dict(color=EDGE_COLOR, linewidth=1.15),
             ax=ax,
         )
         sns.pointplot(
@@ -532,11 +498,11 @@ def _plot_violin(ax, sub: pd.DataFrame, dv: str, xcol: str | None, hue: str | No
             ax=ax,
         )
     else:
-        sns.violinplot(data=sub, y=dv, color="#D5E1EF", inner=None, cut=0, linewidth=0.9, saturation=0.72, ax=ax)
-        sns.boxplot(data=sub, y=dv, color="#AFC3DD", width=BOX_WIDTH * 0.55, fliersize=0, linewidth=0.95, boxprops=dict(alpha=0.55), ax=ax)
+        sns.violinplot(data=sub, y=dv, color=SINGLE_GROUP_COLOR, inner=None, cut=0, linewidth=0.9, saturation=0.72, ax=ax)
+        sns.boxplot(data=sub, y=dv, color=SINGLE_GROUP_COLOR, width=BOX_WIDTH * 0.55, fliersize=0, linewidth=0.95, boxprops=dict(alpha=0.55), ax=ax)
         mean = pd.to_numeric(sub[dv], errors="coerce").mean()
         low, high = _ci95(sub[dv])
-        ax.errorbar([0], [mean], yerr=[[mean - low], [high - mean]], fmt=MEAN_MARKER, color="#2F3B46", capsize=4, lw=1.0, zorder=MEAN_ZORDER)
+        ax.errorbar([0], [mean], yerr=[[mean - low], [high - mean]], fmt=MEAN_MARKER, color=EDGE_COLOR, capsize=4, lw=1.0, zorder=MEAN_ZORDER)
 
 
 def _dedupe_legend(ax) -> None:
@@ -574,27 +540,23 @@ def _plot_distribution_panels(df: pd.DataFrame, cols: list[str], out_dir: Path, 
             sub[hue] = sub[hue].map(_normalize_category_value)
 
         palette = _get_grouped_palette(sub, hue if hue in sub.columns and hue != xcol else xcol if xcol in sub.columns else None)
-        plot_specs = [
-            ("box", _plot_box, "box"),
-            ("jitter", _plot_jitter, "jitter"),
-            ("box_mean_ci", _plot_box_mean_ci, "box+mean±95% CI"),
-            ("violin", _plot_violin, "violin"),
-        ]
+        fig = plt.figure(figsize=(10.4, 4.9))
+        gs = fig.add_gridspec(1, 2, width_ratios=[3.6, 1.45], wspace=0.12)
+        ax = fig.add_subplot(gs[0, 0])
+        ax_info = fig.add_subplot(gs[0, 1])
 
-        for kind_key, plot_fn, kind_label in plot_specs:
-            fig, ax = plt.subplots(figsize=(8.4, 4.8))
-            plot_fn(ax, sub, dv, xcol, hue, palette)
-            _finalize_axis(ax, dv, xcol, _publication_title(dv, xcol, hue if hue != xcol else None, kind_label))
-            _annotate_cluster_stats(ax, sub, dv, xcol, hue if hue in sub.columns and hue != xcol else None)
-            _dedupe_legend(ax)
-            if xcol and xcol in sub.columns:
-                fig.tight_layout(rect=(0, 0.09, 1, 1))
-            else:
-                fig.tight_layout()
-            path = out_dir / f"{prefix}_{dv}_{kind_key}.png"
-            fig.savefig(path, dpi=300, bbox_inches="tight")
-            plt.close(fig)
-            made.append(str(path))
+        _plot_box_mean_ci(ax, sub, dv, xcol, hue, palette)
+        if xcol or hue:
+            _plot_jitter(ax, sub, dv, xcol, hue, palette)
+        _finalize_axis(ax, dv, xcol, _publication_title(dv, xcol, hue if hue != xcol else None, "box+mean±95% CI"))
+        _dedupe_legend(ax)
+        summary_lines = _build_right_summary_lines(sub, dv, xcol, hue if hue in sub.columns and hue != xcol else None)
+        _summary_box(ax_info, f"{dv} statistics", summary_lines)
+        fig.tight_layout()
+        path = out_dir / f"{prefix}_{dv}_main.png"
+        fig.savefig(path, dpi=300, bbox_inches="tight")
+        plt.close(fig)
+        made.append(str(path))
     return made
 
 
@@ -708,7 +670,7 @@ def main():
         "outputs": outputs,
         "stats": ["n", "mean", "sd", "median", "min", "max", "skewness", "kurtosis", "ci95", "shapiro_p"],
         "stratification": ["WWR", "Complexity", "ExperienceGroup"],
-        "figure_style": "Origin/Building and Environment-inspired fresh style; blue-orange publication palette; box and jitter exported as separate figures; per-WWR SD/mean annotations placed above each cluster instead of a right-side summary box",
+        "figure_style": "Building and Environment / Origin-inspired publication style; low-saturation blue-orange palette; narrow non-overlapping boxplots; light jitter overlay; right-side statistical summary box with n/M/SD.",
     }
     (out / "descriptive_summary.json").write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     print(json.dumps(payload, ensure_ascii=False))
