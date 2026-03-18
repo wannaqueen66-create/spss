@@ -485,7 +485,11 @@ for (dv in dvs) {
     summarise(DV = dv, n = dplyr::n(), mean = mean(.data[[dv]], na.rm = TRUE), sd = sd(.data[[dv]], na.rm = TRUE), .groups = "drop") %>%
     relocate(.data$DV)
 
-  rhs <- paste("WWR * Complexity * ExperienceGroup")
+  if (dv %in% c("B1", "B2", "B3")) {
+    rhs <- paste("WWR * ExperienceGroup")
+  } else {
+    rhs <- paste("WWR * Complexity * ExperienceGroup")
+  }
   fit_obj <- try(fit_with_fallback(formula_txt = paste0(dv, " ~ ", rhs), dat = dat), silent = TRUE)
   if (inherits(fit_obj, "try-error")) {
     status_rows[[length(status_rows) + 1]] <- data.frame(DV = dv, Status = "fit_failed", Reason = as.character(fit_obj), n_rows = n_rows, n_subjects = n_subjects, caution_flag = TRUE, caution_reason = "fit_failed")
