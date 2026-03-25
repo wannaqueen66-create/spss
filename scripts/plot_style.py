@@ -22,7 +22,7 @@ def apply_bae_style() -> None:
 
     mpl.rcParams.update({
         "font.family": "sans-serif",
-        "font.sans-serif": ["Arial", "DejaVu Sans", "Liberation Sans", "Noto Sans"],
+        "font.sans-serif": ["Noto Sans CJK SC", "Noto Sans CJK JP", "Arial Unicode MS", "Arial", "DejaVu Sans", "Liberation Sans", "Noto Sans"],
         "font.size": 10,
         "axes.titlesize": 11,
         "axes.labelsize": 10,
