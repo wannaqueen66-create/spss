@@ -55,7 +55,7 @@ def main() -> int:
     out['Subdomain'] = df['Measure'].astype(str).map(lambda x: SUBDOMAIN_MAP.get(x, 'Other'))
     out['Measure'] = df['Measure']
     out['n'] = df['n']
-    out['M'] = df['Mean'].map(lambda x: f'{float(x):.3f}' if pd.notna(x) else '')
+    out['Mean'] = df['Mean'].map(lambda x: f'{float(x):.3f}' if pd.notna(x) else '')
     out['SD'] = df['SD'].map(lambda x: f'{float(x):.3f}' if pd.notna(x) else '')
     out['95% CI'] = df['95% CI']
     out['Median'] = df['Median'].map(lambda x: f'{float(x):.3f}' if pd.notna(x) else '')
