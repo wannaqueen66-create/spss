@@ -14,20 +14,17 @@ from plot_style import apply_bae_style
 
 CONSTRUCTS = {
     "task_supportiveness": {
-        "title_zh": "空间任务支持性评价",
-        "title_en": "Appraisal of Task Supportiveness in Space",
+        "title_en": "Task Supportiveness in Space",
         "items": ["S1", "S2", "S3"],
         "complexity_levels": [0, 1],
     },
     "affective_behavioral": {
-        "title_zh": "情感—行为结果评价",
-        "title_en": "Affective and Behavioral Outcome Appraisal",
+        "title_en": "Affective and Behavioral Outcomes",
         "items": ["S4", "S5"],
         "complexity_levels": [0, 1],
     },
     "functional_equipment": {
-        "title_zh": "功能性器材要素的认知评价",
-        "title_en": "Cognitive Appraisal of Functional Equipment Elements",
+        "title_en": "Functional Equipment Appraisal",
         "items": ["B1", "B2", "B3"],
         "complexity_levels": [1],
     },
@@ -53,7 +50,6 @@ def prep_long(df: pd.DataFrame, group_col: str) -> pd.DataFrame:
             tmp = tmp.rename(columns={group_col: "Group", dv: "Score"})
             tmp["Measure"] = dv
             tmp["Construct"] = construct_key
-            tmp["ConstructZH"] = meta["title_zh"]
             tmp["ConstructEN"] = meta["title_en"]
             rows.append(tmp)
     if not rows:
@@ -83,7 +79,6 @@ def build_table(df: pd.DataFrame, group_col: str) -> pd.DataFrame:
             desc = subj.groupby(["Group", "Complexity"], as_index=False).agg(mean=("Score", "mean"), sd=("Score", "std"), n=("Score", "count"))
             for group in sorted(subj["Group"].dropna().astype(str).unique()):
                 row = {
-                    "ConstructZH": meta["title_zh"],
                     "ConstructEN": meta["title_en"],
                     "Measure": dv,
                     "Group": group,
@@ -172,7 +167,7 @@ def plot_panels(long_df: pd.DataFrame, out_png: Path, title: str) -> None:
         handles, labels = ax.get_legend_handles_labels()
         if handles:
             ax.legend_.remove()
-        ax.set_title(f"{meta['title_zh']}\n{meta['title_en']}", fontsize=10.5)
+        ax.set_title(meta['title_en'], fontsize=10.5)
         ax.set_xlabel('')
         ax.set_ylabel('Score')
         ax.grid(axis='y', alpha=0.25)
