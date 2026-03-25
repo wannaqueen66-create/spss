@@ -15,20 +15,17 @@ from plot_style import apply_bae_style
 
 CONSTRUCTS = {
     "task_supportiveness": {
-        "title_zh": "空间任务支持性评价",
-        "title_en": "Appraisal of Task Supportiveness in Space",
+        "title_en": "Task Supportiveness in Space",
         "items": ["S1", "S2", "S3"],
         "complexity_filter": None,
     },
     "affective_behavioral": {
-        "title_zh": "情感—行为结果评价",
-        "title_en": "Affective and Behavioral Outcome Appraisal",
+        "title_en": "Affective and Behavioral Outcomes",
         "items": ["S4", "S5"],
         "complexity_filter": None,
     },
     "functional_equipment": {
-        "title_zh": "功能性器材要素的认知评价",
-        "title_en": "Cognitive Appraisal of Functional Equipment Elements",
+        "title_en": "Functional Equipment Appraisal",
         "items": ["B1", "B2", "B3"],
         "complexity_filter": 1,
     },
@@ -88,7 +85,6 @@ def build_summary(df: pd.DataFrame, group_col: str) -> pd.DataFrame:
             if tmp.empty:
                 continue
             tmp["Construct"] = construct_key
-            tmp["ConstructZH"] = meta["title_zh"]
             tmp["ConstructEN"] = meta["title_en"]
             rows.append(tmp)
     if not rows:
@@ -133,7 +129,6 @@ def build_pairwise_table(df: pd.DataFrame, group_col: str) -> pd.DataFrame:
             for group in sorted(subj["Group"].dropna().astype(str).unique()):
                 sg = subj[subj["Group"].astype(str) == group].copy()
                 row = {
-                    "ConstructZH": meta["title_zh"],
                     "ConstructEN": meta["title_en"],
                     "Measure": dv,
                     "Group": group,
@@ -192,7 +187,7 @@ def plot_combined(summary: pd.DataFrame, out_png: Path, title: str) -> None:
                 if g["se"].notna().any():
                     ax.fill_between(g["WWR"], g["mean"] - g["se"], g["mean"] + g["se"], color=color, alpha=0.10)
 
-        ax.set_title(f"{meta['title_zh']}\n{meta['title_en']}", fontsize=10.5)
+        ax.set_title(meta['title_en'], fontsize=10.5)
         ax.set_xlabel("WWR")
         ax.set_xticks([15, 45, 75])
         ax.set_xlim(12, 78)
@@ -263,7 +258,6 @@ def main() -> int:
         "outputs": [str(summary_csv), str(pairwise_csv), str(pairwise_xlsx), str(png)],
         "constructs": {
             k: {
-                "title_zh": v["title_zh"],
                 "title_en": v["title_en"],
                 "items": v["items"],
                 "complexity_filter": v["complexity_filter"],
