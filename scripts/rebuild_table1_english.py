@@ -16,6 +16,14 @@ SUBDOMAIN_MAP = {
     'B1': 'Functional equipment appraisal',
     'B2': 'Functional equipment appraisal',
     'B3': 'Functional equipment appraisal',
+    'Bmean': 'Functional equipment appraisal (composite)',
+    'IPQ1': 'Presence',
+    'IPQ2': 'Presence',
+    'IPQ3': 'Presence',
+    'IPQ4': 'Presence',
+    'IPQ5': 'Presence',
+    'IPQ6': 'Presence',
+    'IPQ_mean': 'Presence (composite)',
 }
 
 DOMAIN_MAP = {
@@ -44,7 +52,7 @@ def main() -> int:
 
     out = pd.DataFrame()
     out['Domain'] = df['Measure'].astype(str).map(lambda x: DOMAIN_MAP.get(x, 'Other'))
-    out['Subdomain'] = df['Measure'].astype(str).map(lambda x: SUBDOMAIN_MAP.get(x, '—'))
+    out['Subdomain'] = df['Measure'].astype(str).map(lambda x: SUBDOMAIN_MAP.get(x, 'Other'))
     out['Measure'] = df['Measure']
     out['n'] = df['n']
     out['M'] = df['Mean'].map(lambda x: f'{float(x):.3f}' if pd.notna(x) else '')
@@ -57,7 +65,10 @@ def main() -> int:
         'Task supportiveness in space': 0,
         'Affective and behavioral outcomes': 1,
         'Functional equipment appraisal': 2,
-        '—': 3,
+        'Functional equipment appraisal (composite)': 3,
+        'Presence': 4,
+        'Presence (composite)': 5,
+        'Other': 6,
     }
     out['_d'] = out['Domain'].map(domain_order).fillna(99)
     out['_s'] = out['Subdomain'].map(sub_order).fillna(99)
